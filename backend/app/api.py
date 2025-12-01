@@ -1,6 +1,7 @@
 """
 API FastAPI pour exposer le RAG photographie au frontend.
 """
+
 from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -53,11 +54,12 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+
 # Initialiser la base de données au démarrage
 @app.on_event("startup")
 async def startup_event():
     init_db()
-    
+
     # Initialiser Phoenix monitoring
     try:
         phoenix_endpoint = os.getenv("PHOENIX_ENDPOINT", "http://localhost:6006")
@@ -65,6 +67,7 @@ async def startup_event():
         logger.info(f"Phoenix monitoring initialisé (endpoint: {phoenix_endpoint})")
     except Exception as e:
         logger.warning(f"Phoenix monitoring non disponible: {e}")
+
 
 # CORS pour permettre les requêtes depuis le frontend (Vite ou Next.js)
 # Configuration depuis les variables d'environnement
@@ -101,20 +104,19 @@ security = HTTPBearer()
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)
 ) -> User:
     """Dépendance pour vérifier le token et récupérer l'utilisateur actuel."""
     token = credentials.credentials
     payload = verify_token(token)
-    
+
     if payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token invalide ou expiré",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     email: str = payload.get("sub")
     if email is None:
         raise HTTPException(
@@ -122,7 +124,7 @@ def get_current_user(
             detail="Token invalide",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     user = get_user_by_email(db, email)
     if not user:
         raise HTTPException(
@@ -130,7 +132,7 @@ def get_current_user(
             detail="Utilisateur non trouvé",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     return user
 
 
@@ -138,20 +140,20 @@ class SignupRequest(BaseModel):
     name: str
     email: EmailStr
     password: str
-    
-    @validator('name')
+
+    @validator("name")
     def validate_name(cls, v):
         if not v or len(v.strip()) < 2:
             raise ValueError("Le nom doit contenir au moins 2 caractères")
         if len(v) > 100:
             raise ValueError("Le nom est trop long (max 100 caractères)")
         return input_sanitizer.sanitize_text(v, max_length=100)
-    
-    @validator('email')
+
+    @validator("email")
     def validate_email(cls, v):
         return input_sanitizer.sanitize_email(v)
-    
-    @validator('password')
+
+    @validator("password")
     def validate_password(cls, v):
         is_valid, error = input_sanitizer.validate_password(v)
         if not is_valid:
@@ -173,8 +175,8 @@ class AuthResponse(BaseModel):
 class QuestionRequest(BaseModel):
     question: str
     force_rebuild: bool = False
-    
-    @validator('question')
+
+    @validator("question")
     def validate_question(cls, v):
         return input_sanitizer.sanitize_question(v)
 
@@ -201,6 +203,7 @@ async def root():
 async def health():
     """Endpoint de santé basique."""
     from .health import HealthChecker
+
     checker = HealthChecker()
     return checker.get_system_health()
 
@@ -209,6 +212,7 @@ async def health():
 async def health_detailed():
     """Endpoint de santé détaillé."""
     from .health import HealthChecker
+
     checker = HealthChecker()
     return checker.get_detailed_health()
 
@@ -217,30 +221,27 @@ async def health_detailed():
 async def get_metrics():
     """Endpoint pour récupérer les métriques."""
     from .metrics import get_metrics_collector
+
     metrics = get_metrics_collector()
     return metrics.get_all_metrics_summary()
 
 
 @app.get("/alerts")
-async def get_alerts(
-    hours: int = 24,
-    level: Optional[str] = None,
-    current_user: User = Depends(get_current_user)
-):
+async def get_alerts(hours: int = 24, level: Optional[str] = None, current_user: User = Depends(get_current_user)):
     """Récupère les alertes récentes (nécessite authentification)."""
     from .alerting import get_alert_manager, AlertLevel
-    
+
     alert_manager = get_alert_manager()
-    
+
     alert_level = None
     if level:
         try:
             alert_level = AlertLevel(level.lower())
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Niveau d'alerte invalide: {level}")
-    
+
     alerts = alert_manager.get_recent_alerts(hours=hours, level=alert_level)
-    
+
     return {
         "count": len(alerts),
         "alerts": [
@@ -254,7 +255,7 @@ async def get_alerts(
                 "metadata": a.metadata,
             }
             for a in alerts
-        ]
+        ],
     }
 
 
@@ -266,20 +267,20 @@ async def signup(request: Request, signup_data: SignupRequest, db: Session = Dep
     """
     # Créer l'utilisateur dans la base de données
     user = create_user_db(db, signup_data.name, signup_data.email, signup_data.password)
-    
+
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cet email est déjà utilisé",
         )
-    
+
     # Créer le token
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user["email"], "name": user["name"]},
         expires_delta=access_token_expires,
     )
-    
+
     return AuthResponse(
         access_token=access_token,
         user=user,
@@ -293,21 +294,21 @@ async def login(request: Request, login_data: LoginRequest, db: Session = Depend
     Connexion d'un utilisateur existant.
     """
     user = authenticate_user_db(db, login_data.email, login_data.password)
-    
+
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou mot de passe incorrect",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     # Créer le token
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user["email"], "name": user["name"]},
         expires_delta=access_token_expires,
     )
-    
+
     return AuthResponse(
         access_token=access_token,
         user=user,
@@ -329,8 +330,8 @@ class ConversationRequest(BaseModel):
     conversation_id: Optional[int] = None
     question: str
     force_rebuild: bool = False
-    
-    @validator('question')
+
+    @validator("question")
     def validate_question(cls, v):
         if not v or len(v.strip()) < 3:
             raise ValueError("La question doit contenir au moins 3 caractères")
@@ -353,10 +354,7 @@ class MessageResponse(BaseModel):
 
 
 @app.get("/conversations", response_model=List[ConversationResponse])
-async def get_conversations(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_conversations(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Récupère toutes les conversations de l'utilisateur."""
     conversations = get_user_conversations(db, current_user.id)
     return [
@@ -372,9 +370,7 @@ async def get_conversations(
 
 @app.get("/conversations/{conversation_id}/messages", response_model=List[MessageResponse])
 async def get_messages(
-    conversation_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    conversation_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Récupère tous les messages d'une conversation."""
     messages = get_conversation_messages(db, conversation_id, current_user.id)
@@ -391,10 +387,7 @@ async def get_messages(
 
 
 @app.post("/conversations", response_model=ConversationResponse)
-async def create_new_conversation(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def create_new_conversation(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Crée une nouvelle conversation."""
     conversation = create_conversation(db, current_user.id)
     return {
@@ -407,9 +400,7 @@ async def create_new_conversation(
 
 @app.delete("/conversations/{conversation_id}")
 async def delete_conversation_endpoint(
-    conversation_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    conversation_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Supprime une conversation."""
     success = delete_conversation(db, conversation_id, current_user.id)
@@ -419,18 +410,14 @@ async def delete_conversation_endpoint(
 
 
 async def generate_streaming_response(
-    question: str,
-    conversation_id: int,
-    db: Session,
-    current_user: User,
-    force_rebuild: bool = False
+    question: str, conversation_id: int, db: Session, current_user: User, force_rebuild: bool = False
 ):
     """
     Génère une réponse en streaming et sauvegarde dans la DB.
     """
     full_answer = ""
     sources = []
-    
+
     try:
         # Stream la réponse
         for chunk in answer_question_stream(question, force_rebuild=force_rebuild):
@@ -441,11 +428,11 @@ async def generate_streaming_response(
                 if not full_answer:
                     # Si full_answer est vide, utiliser la réponse complète générée
                     full_answer = chunk.get("answer", "")
-                
+
                 # Sauvegarder la réponse complète dans la DB
                 if full_answer:
                     add_message(db, conversation_id, "assistant", full_answer)
-                
+
                 # Envoyer les sources
                 yield f"data: {json.dumps({'type': 'sources', 'sources': sources})}\n\n"
                 # Envoyer le signal de fin
@@ -459,7 +446,7 @@ async def generate_streaming_response(
             else:
                 # Format inattendu, logger pour debug
                 print(f"Chunk inattendu: {type(chunk)} - {chunk}")
-        
+
         # Si on n'a pas reçu de sources, les récupérer manuellement
         if not sources and full_answer:
             try:
@@ -467,7 +454,7 @@ async def generate_streaming_response(
                 retriever_engine = RetrievalEngine(vector_store)
                 retriever = retriever_engine.get_retriever()
                 retrieved_docs = retriever.invoke(question)
-                
+
                 for doc in retrieved_docs:
                     source_info = {
                         "document": doc.metadata.get("source_document", "Inconnu"),
@@ -476,12 +463,12 @@ async def generate_streaming_response(
                         "preview": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
                     }
                     sources.append(source_info)
-                
+
                 if sources:
                     yield f"data: {json.dumps({'type': 'sources', 'sources': sources})}\n\n"
             except Exception as e:
                 print(f"Erreur lors de la récupération des sources: {e}")
-        
+
         # S'assurer que le message est sauvegardé si ce n'est pas déjà fait
         if full_answer:
             try:
@@ -491,9 +478,10 @@ async def generate_streaming_response(
                     add_message(db, conversation_id, "assistant", full_answer)
             except Exception as e:
                 print(f"Erreur lors de la sauvegarde du message: {e}")
-        
+
     except Exception as e:
         import traceback
+
         error_details = traceback.format_exc()
         print(f"Erreur dans generate_streaming_response: {error_details}")
         yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
@@ -503,6 +491,7 @@ async def generate_streaming_response(
 async def ask_question_stream_options():
     """Gère les requêtes OPTIONS pour le streaming (CORS preflight)."""
     from fastapi.responses import Response
+
     return Response(
         status_code=200,
         headers={
@@ -510,7 +499,7 @@ async def ask_question_stream_options():
             "Access-Control-Allow-Credentials": "true",
             "Access-Control-Allow-Methods": "POST, OPTIONS",
             "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        }
+        },
     )
 
 
@@ -534,17 +523,13 @@ async def ask_question_stream(
                 raise HTTPException(status_code=404, detail="Conversation non trouvée")
         else:
             conversation = create_conversation(db, current_user.id, conversation_data.question[:50])
-        
+
         # Ajouter le message utilisateur
         add_message(db, conversation.id, "user", conversation_data.question)
-        
+
         return StreamingResponse(
             generate_streaming_response(
-                conversation_data.question,
-                conversation.id,
-                db,
-                current_user,
-                conversation_data.force_rebuild
+                conversation_data.question, conversation.id, db, current_user, conversation_data.force_rebuild
             ),
             media_type="text/event-stream",
             headers={
@@ -555,18 +540,20 @@ async def ask_question_stream(
                 "Access-Control-Allow-Credentials": "true",
                 "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
                 "Access-Control-Allow-Headers": "*",
-            }
+            },
         )
     except HTTPException:
         raise
     except Exception as e:
         import traceback
+
         error_details = traceback.format_exc()
         print(f"Erreur dans ask_question_stream: {error_details}")
+
         # Retourner une réponse d'erreur en streaming
         async def error_stream():
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
-        
+
         return StreamingResponse(
             error_stream(),
             media_type="text/event-stream",
@@ -576,7 +563,7 @@ async def ask_question_stream(
                 "Access-Control-Allow-Credentials": "true",
                 "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
                 "Access-Control-Allow-Headers": "*",
-            }
+            },
         )
 
 
@@ -600,20 +587,20 @@ async def ask_question(
                 raise HTTPException(status_code=404, detail="Conversation non trouvée")
         else:
             conversation = create_conversation(db, current_user.id, conversation_data.question[:50])
-        
+
         # Ajouter le message utilisateur
         add_message(db, conversation.id, "user", conversation_data.question)
-        
+
         # Obtenir la réponse du RAG
         result = answer_question(
             question=conversation_data.question,
             show_sources=True,
             force_rebuild=conversation_data.force_rebuild,
         )
-        
+
         # Ajouter la réponse de l'assistant
         add_message(db, conversation.id, "assistant", result.get("answer", ""))
-        
+
         # Convertir les sources en modèles Pydantic
         sources = [
             SourceInfo(
@@ -624,7 +611,7 @@ async def ask_question(
             )
             for source in result.get("sources", [])
         ]
-        
+
         return AnswerResponse(
             answer=result.get("answer", ""),
             sources=sources,
@@ -638,20 +625,21 @@ async def ask_question(
 
 # ========== Export de conversations ==========
 
+
 @app.get("/conversations/{conversation_id}/export")
 async def export_conversation(
     conversation_id: int,
     format: str = "json",
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Exporte une conversation dans différents formats."""
     conversation = get_conversation(db, conversation_id, current_user.id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation non trouvée")
-    
+
     messages = get_conversation_messages(db, conversation_id, current_user.id)
-    
+
     if format == "json":
         content = export_conversation_json(conversation, messages)
         media_type = "application/json"
@@ -670,12 +658,11 @@ async def export_conversation(
         filename = f"conversation_{conversation_id}.txt"
     else:
         raise HTTPException(status_code=400, detail=f"Format non supporté: {format}")
-    
+
     from fastapi.responses import Response
+
     return Response(
-        content=content,
-        media_type=media_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        content=content, media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
 
 
@@ -684,7 +671,7 @@ async def export_conversations_bulk_endpoint(
     conversation_ids: List[int],
     format: str = "json",
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Exporte plusieurs conversations dans un seul fichier."""
     conversations = []
@@ -692,12 +679,12 @@ async def export_conversations_bulk_endpoint(
         conv = get_conversation(db, conv_id, current_user.id)
         if conv:
             conversations.append(conv)
-    
+
     if not conversations:
         raise HTTPException(status_code=404, detail="Aucune conversation trouvée")
-    
+
     content = export_conversations_bulk(conversations, format, db)
-    
+
     if format == "json":
         media_type = "application/json"
         filename = "conversations_export.json"
@@ -706,16 +693,16 @@ async def export_conversations_bulk_endpoint(
         filename = "conversations_export.csv"
     else:
         raise HTTPException(status_code=400, detail=f"Format non supporté pour bulk: {format}")
-    
+
     from fastapi.responses import Response
+
     return Response(
-        content=content,
-        media_type=media_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        content=content, media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
 
 
 # ========== Recherche dans l'historique ==========
+
 
 @app.get("/search/messages")
 async def search_messages(
@@ -724,17 +711,11 @@ async def search_messages(
     role: Optional[str] = Query(None, regex="^(user|assistant)$"),
     limit: int = Query(50, ge=1, le=100),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Recherche dans les messages des conversations."""
-    results = search_in_conversations(
-        db, current_user.id, query, conversation_id, role, limit
-    )
-    return {
-        "query": query,
-        "count": len(results),
-        "results": results
-    }
+    results = search_in_conversations(db, current_user.id, query, conversation_id, role, limit)
+    return {"query": query, "count": len(results), "results": results}
 
 
 @app.get("/search/conversations")
@@ -742,33 +723,28 @@ async def search_conversations(
     query: str = Query(..., min_length=1),
     limit: int = Query(20, ge=1, le=50),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Recherche des conversations par titre."""
     results = search_conversations_by_title(db, current_user.id, query, limit)
-    return {
-        "query": query,
-        "count": len(results),
-        "results": results
-    }
+    return {"query": query, "count": len(results), "results": results}
 
 
 @app.get("/conversations/{conversation_id}/statistics")
 async def get_statistics(
-    conversation_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    conversation_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Récupère les statistiques d'une conversation."""
     conversation = get_conversation(db, conversation_id, current_user.id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation non trouvée")
-    
+
     stats = get_conversation_statistics(db, current_user.id, conversation_id)
     return stats
 
 
 # ========== Partage de conversations ==========
+
 
 @app.post("/conversations/{conversation_id}/share")
 async def share_conversation(
@@ -776,18 +752,16 @@ async def share_conversation(
     expires_in_days: Optional[int] = Query(None, ge=1, le=365),
     max_views: Optional[int] = Query(None, ge=1),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Crée un lien de partage pour une conversation."""
     try:
-        shared = create_shared_conversation(
-            db, conversation_id, current_user.id, expires_in_days, max_views
-        )
-        
+        shared = create_shared_conversation(db, conversation_id, current_user.id, expires_in_days, max_views)
+
         # Construire l'URL de partage
         base_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
         share_url = f"{base_url}/shared/{shared.share_token}"
-        
+
         return {
             "share_token": shared.share_token,
             "share_url": share_url,
@@ -799,10 +773,7 @@ async def share_conversation(
 
 
 @app.get("/shared/{share_token}")
-async def get_shared_conversation_endpoint(
-    share_token: str,
-    db: Session = Depends(get_db)
-):
+async def get_shared_conversation_endpoint(share_token: str, db: Session = Depends(get_db)):
     """Récupère une conversation partagée (publique, pas d'authentification requise)."""
     result = get_shared_conversation(db, share_token)
     if not result:
@@ -812,9 +783,7 @@ async def get_shared_conversation_endpoint(
 
 @app.delete("/conversations/{conversation_id}/share")
 async def revoke_share(
-    conversation_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    conversation_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Révoque un partage de conversation."""
     success = revoke_shared_conversation(db, conversation_id, current_user.id)
@@ -824,10 +793,7 @@ async def revoke_share(
 
 
 @app.get("/conversations/shared")
-async def list_shared_conversations(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def list_shared_conversations(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Liste toutes les conversations partagées par l'utilisateur."""
     shared = get_user_shared_conversations(db, current_user.id)
     return {"count": len(shared), "shared_conversations": shared}
@@ -835,20 +801,16 @@ async def list_shared_conversations(
 
 # ========== Multi-LLM support ==========
 
+
 @app.get("/llms")
-async def list_llms(
-    current_user: User = Depends(get_current_user)
-):
+async def list_llms(current_user: User = Depends(get_current_user)):
     """Liste tous les LLM disponibles."""
     manager = get_llm_manager()
     return {"llms": manager.list_llms()}
 
 
 @app.get("/llms/{llm_name}")
-async def get_llm_info(
-    llm_name: str,
-    current_user: User = Depends(get_current_user)
-):
+async def get_llm_info(llm_name: str, current_user: User = Depends(get_current_user)):
     """Récupère les informations sur un LLM spécifique."""
     manager = get_llm_manager()
     try:
@@ -877,5 +839,5 @@ async def ask_question_with_llm(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
 
+    uvicorn.run(app, host="0.0.0.0", port=8001)
