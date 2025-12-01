@@ -1,0 +1,106 @@
+# ============================================
+# 🔐 SÉCURITÉ (OBLIGATOIRE)
+# ============================================
+SECRET_KEY=mkBfPUojq4WPpO7kqXv0QGY8xOWmHp8L8LW0WgR1G0g
+JWT_SECRET_KEY=mkBfPUojq4WPpO7kqXv0QGY8xOWmHp8L8LW0WgR1G0g
+
+# ============================================
+# 🗄️ BASE DE DONNÉES
+# ============================================
+# SQLite (développement)
+DATABASE_URL=sqlite:///./storage/database.db
+
+# PostgreSQL (production)
+# DATABASE_URL=postgresql://user:password@localhost:5432/rag_photographie
+
+# Pool de connexions (optionnel)
+DB_POOL_SIZE=20
+DB_MAX_OVERFLOW=40
+DB_POOL_TIMEOUT=30
+DB_POOL_RECYCLE=3600
+DB_ECHO=false
+
+# ============================================
+# 🤖 LLM (Large Language Model)
+# ============================================
+# Ollama (local, gratuit)
+OLLAMA_BASE_URL=http://localhost:11434
+LLM_MODEL_NAME=llama3
+
+# OpenAI (optionnel, payant)
+# OPENAI_API_KEY=sk-...
+# OPENAI_MODEL=gpt-3.5-turbo
+
+# HuggingFace (optionnel)
+# HUGGINGFACE_API_KEY=hf_...
+# HUGGINGFACE_MODEL=mistralai/Mistral-7B-Instruct-v0.1
+
+# Anthropic (optionnel, payant)
+# ANTHROPIC_API_KEY=sk-ant-...
+
+# ============================================
+# 🔍 EMBEDDINGS
+# ============================================
+EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
+
+# ============================================
+# 📊 MONITORING - Phoenix
+# ============================================
+PHOENIX_ENDPOINT=http://localhost:6006
+
+# ============================================
+# 💾 CACHE Redis (optionnel mais recommandé)
+# ============================================
+# Redis local
+# REDIS_URL=redis://localhost:6379/0
+
+# Redis avec mot de passe
+# REDIS_URL=redis://:password@localhost:6379/0
+
+# TTL du cache (en secondes)
+# CACHE_TTL=3600
+
+# ============================================
+# 🌐 FRONTEND
+# ============================================
+FRONTEND_URL=http://localhost:3000
+
+# Origines CORS autorisées (séparées par des virgules)
+# Par défaut : localhost:3000, localhost:3001, 127.0.0.1:3000, rag-photographie-frontend.onrender.com
+# Exemple: CORS_ORIGINS=https://mon-site.com,https://autre-site.com
+# CORS_ORIGINS=
+
+# ============================================
+# ⚡ STREAMING
+# ============================================
+# Délai entre chaque token (en secondes)
+STREAMING_DELAY=0.03
+
+# ============================================
+# 🚨 ALERTES (optionnel)
+# ============================================
+# Canaux d'alerte : log, email, webhook (séparés par virgule)
+ALERT_CHANNELS=log
+
+# Email (si ALERT_CHANNELS contient "email")
+# SMTP_HOST=smtp.gmail.com
+# SMTP_PORT=587
+# SMTP_USER=ton-email@gmail.com
+# SMTP_PASSWORD=ton-mot-de-passe-app
+# ALERT_EMAIL_TO=admin@example.com
+
+# Webhook (si ALERT_CHANNELS contient "webhook")
+# ALERT_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+
+# Seuils d'alerte
+ALERT_MAX_HISTORY=1000
+ALERT_COOLDOWN_MINUTES=5
+ALERT_ERROR_RATE_WARNING=0.05
+ALERT_ERROR_RATE_CRITICAL=0.10
+ALERT_RESPONSE_TIME_WARNING=5.0
+ALERT_RESPONSE_TIME_CRITICAL=10.0
+ALERT_DB_CONN_WARNING=80
+ALERT_DB_CONN_CRITICAL=90
+ALERT_CACHE_HIT_WARNING=0.50
+ALERT_CACHE_HIT_CRITICAL=0.30
+
