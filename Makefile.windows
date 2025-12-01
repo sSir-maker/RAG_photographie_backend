@@ -1,0 +1,28 @@
+# Makefile pour Windows (utilise les scripts PowerShell)
+# Note: Sur Windows, utilise plutôt les scripts PowerShell directement
+
+.PHONY: help install test lint format clean
+
+help:
+	@echo "Sur Windows, utilise les scripts PowerShell:"
+	@echo "  .\scripts\install-dev.ps1  - Installer les outils"
+	@echo "  .\scripts\format.ps1       - Formater le code"
+	@echo "  .\scripts\lint.ps1          - Vérifier le code"
+	@echo "  .\scripts\test.ps1         - Exécuter les tests"
+	@echo "  .\scripts\clean.ps1        - Nettoyer"
+
+install:
+	powershell -ExecutionPolicy Bypass -File scripts/install-dev.ps1
+
+test:
+	powershell -ExecutionPolicy Bypass -File scripts/test.ps1
+
+lint:
+	powershell -ExecutionPolicy Bypass -File scripts/lint.ps1
+
+format:
+	powershell -ExecutionPolicy Bypass -File scripts/format.ps1
+
+clean:
+	powershell -ExecutionPolicy Bypass -File scripts/clean.ps1
+

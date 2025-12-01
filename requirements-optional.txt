@@ -1,0 +1,15 @@
+# Dépendances optionnelles pour fonctionnalités avancées
+
+# Option 1 : pypdfium2 (RECOMMANDÉ - plus facile à installer)
+# Pour extraire les images intégrées dans les PDFs
+# Installation simple avec wheels précompilés :
+pip install pypdfium2
+
+# Option 2 : PyMuPDF (alternative, peut nécessiter Visual Studio Build Tools)
+# Si pypdfium2 ne fonctionne pas, tu peux essayer :
+# pip install pymupdf
+#
+# IMPORTANT : Si aucune de ces installations ne fonctionne,
+# le système fonctionnera quand même sans cette fonctionnalité.
+# Tu pourras toujours traiter les PDFs avec texte normal et les pages scannées.
+

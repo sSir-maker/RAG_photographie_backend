@@ -1,0 +1,68 @@
+name: Lint and Format
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  python-lint:
+    name: Python Linting
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+    
+    - name: Install linting tools
+      run: |
+        pip install black flake8 pylint mypy isort
+    
+    - name: Check code formatting with Black
+      run: |
+        black --check app/ tests/ || exit 1
+    
+    - name: Check import sorting with isort
+      run: |
+        isort --check-only app/ tests/ || exit 1
+    
+    - name: Run Flake8
+      run: |
+        flake8 app/ tests/ --max-line-length=120 --extend-ignore=E203,W503,E501 || exit 1
+    
+    - name: Run Pylint
+      run: |
+        pylint app/ --disable=C0111,C0103,R0913,R0903,W0613 || exit 1
+    
+    - name: Run MyPy (type checking)
+      run: |
+        mypy app/ --ignore-missing-imports --no-strict-optional || true
+
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    
+    - name: Install formatting tools
+      run: |
+        pip install black isort
+    
+    - name: Check formatting
+      run: |
+        black --check app/ tests/
+        isort --check-only app/ tests/
+

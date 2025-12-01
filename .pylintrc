@@ -1,0 +1,30 @@
+[MASTER]
+ignore=venv,.venv,__pycache__,migrations,alembic/versions
+jobs=0
+suggestion-mode=yes
+
+[MESSAGES CONTROL]
+disable=
+    C0111,  # missing-docstring
+    C0103,  # invalid-name
+    R0913,  # too-many-arguments
+    R0903,  # too-few-public-methods
+    W0613,  # unused-argument
+    C0114,  # missing-module-docstring
+    C0115,  # missing-class-docstring
+    C0116,  # missing-function-docstring
+
+[FORMAT]
+max-line-length=120
+indent-string='    '
+
+[BASIC]
+good-names=i,j,k,ex,Run,_,db,id
+
+[DESIGN]
+max-args=10
+max-attributes=15
+max-branches=15
+max-locals=20
+max-statements=50
+

@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    # Alternative: utiliser l'image officielle
+    # image: phoenix:latest
+    container_name: rag-phoenix
+    ports:
+      - "6006:6006"
+    environment:
+      - PHOENIX_PORT=6006
+    volumes:
+      - ./phoenix_data:/data
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+  # Backend API (optionnel - si vous voulez dockeriser)
+  # backend:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "8001:8001"
+  #   environment:
+  #     - PHOENIX_ENDPOINT=http://phoenix:6006
+  #   depends_on:
+  #     - phoenix
+  #   networks:
+  #     - rag-network
+  #   volumes:
+  #     - ./data:/app/data
+  #     - ./storage:/app/storage
+
+networks:
+  rag-network:
+    driver: bridge
+

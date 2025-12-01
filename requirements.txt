@@ -1,0 +1,64 @@
+# LangChain : versions spécifiques pour compatibilité
+# Note: LangChain 0.3.2 nécessite numpy<2.0.0
+langchain==0.3.2
+langchain-community==0.3.1
+langchain-text-splitters==0.3.0
+langchain-core==0.3.8
+langchain-huggingface>=0.0.1  # Pour HuggingFaceEmbeddings (remplace langchain_community.embeddings)
+
+sentence-transformers==3.1.1
+faiss-cpu>=1.12.0
+
+fastapi==0.115.2
+uvicorn==0.32.0
+python-jose[cryptography]==3.3.0
+bcrypt>=4.0.0
+slowapi>=0.1.9
+cryptography>=41.0.0
+
+python-dotenv==1.0.1
+pdfplumber==0.11.4
+pytesseract==0.3.13
+Pillow==10.4.0
+# pypdfium2 pour PyPDFium2Loader (extraction images PDF avec LangChain)
+# Plus facile à installer que PyMuPDF (wheels précompilés disponibles)
+pypdfium2>=4.0.0
+
+# NumPy : Compatible avec Python 3.11/3.12
+# Avec Python 3.12, on peut utiliser NumPy 2.x si LangChain le permet
+pydantic==2.9.2
+email-validator>=2.0.0
+sqlalchemy>=2.0.0
+prefect>=2.14.0
+# PostgreSQL support
+psycopg2-binary>=2.9.9
+alembic>=1.13.0
+
+# Monitoring & Observability - Arize Phoenix
+# Note: Le package s'appelle "arize-phoenix" sur PyPI
+arize-phoenix>=12.0.0
+openinference-instrumentation-langchain>=0.1.0
+# openinference-semantic-conventions est inclus dans arize-phoenix
+
+# Testing (optionnel - installer avec pip install -r requirements-test.txt)
+# pytest>=7.4.0
+# pytest-asyncio>=0.21.0
+# pytest-cov>=4.1.0
+# httpx>=0.24.0
+# faker>=19.0.0
+
+# Performance & Scalability
+redis>=5.0.0  # Cache Redis
+requests>=2.31.0  # Pour webhooks et health checks
+
+# Multi-LLM support
+langchain-openai>=0.1.0  # Pour OpenAI
+langchain-anthropic>=0.1.0  # Pour Anthropic Claude (optionnel)
+
+# Development tools (optionnel - installer avec pip install -r requirements-dev.txt)
+# black>=23.0.0
+# isort>=5.12.0
+# flake8>=6.0.0
+# pylint>=2.17.0
+# mypy>=1.0.0
+
