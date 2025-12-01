@@ -71,10 +71,17 @@ FRONTEND_URL=http://localhost:3000
 # CORS_ORIGINS=
 
 # ============================================
-# ⚡ STREAMING
+# ⚡ STREAMING & PERFORMANCE
 # ============================================
-# Délai entre chaque token (en secondes)
-STREAMING_DELAY=0.03
+# Délai entre chaque token lors du streaming (en secondes)
+# Valeur optimisée: 0.005 (5ms) pour plus de rapidité
+# Valeur précédente: 0.03 (30ms)
+STREAMING_DELAY=0.005
+
+# Nombre de documents à récupérer pour le RAG
+# Valeur optimisée: 3 (plus rapide)
+# Augmenter pour plus de qualité (ex: 4-5), diminuer pour plus de vitesse (ex: 2)
+NUM_RETRIEVAL_DOCS=3
 
 # ============================================
 # 🚨 ALERTES (optionnel)
