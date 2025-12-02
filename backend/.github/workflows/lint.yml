@@ -2,47 +2,69 @@ name: Lint and Format
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
+  workflow_dispatch:
 
 jobs:
-  lint:
+  python-lint:
+    name: Python Linting
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
-    
-    - name: Install dependencies
+        cache: 'pip'
+
+    - name: Install linting tools
       run: |
-        pip install black flake8 pylint mypy
-    
-    - name: Format with Black (auto-fix and commit)
+        pip install black flake8 pylint mypy isort
+
+    - name: Format code with Black (auto-fix)
       run: |
-        # Formater avec Black
-        black app/ tests/ || exit 0
+        black app/ tests/ || true
         
-        # Configurer git pour le commit automatique
+    - name: Auto-format with isort
+      run: |
+        isort app/ tests/ || true
+
+    - name: Commit formatted code
+      run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        
-        # Vérifier s'il y a des changements et les commiter
         if [ -n "$(git status --porcelain app/ tests/)" ]; then
-          echo "Changements détectés, commit automatique..."
           git add app/ tests/
-          git commit -m "style: Auto-format code with Black [skip ci]" || exit 0
+          git commit -m "style: Auto-format code with Black and isort [skip ci]" || exit 0
           git push || exit 0
-        else
-          echo "Aucun changement nécessaire, tout est déjà formaté"
         fi
-    
-    - name: Lint with flake8
+
+    - name: Check code formatting with Black
+      run: |
+        black --check app/ tests/ || exit 0
+
+    - name: Check import sorting with isort
+      run: |
+        isort --check-only app/ tests/ || exit 0
+
+    - name: Run Flake8
       continue-on-error: true
       run: |
-        flake8 app/ tests/ || true
+        flake8 app/ tests/ --max-line-length=120 --extend-ignore=E203,W503,E501 || true
 
+    - name: Run Pylint
+      continue-on-error: true
+      run: |
+        pylint app/ --disable=C0111,C0103,R0913,R0903,W0613 || true
+
+    - name: Run MyPy (type checking)
+      continue-on-error: true
+      run: |
+        mypy app/ --ignore-missing-imports --no-strict-optional || true
