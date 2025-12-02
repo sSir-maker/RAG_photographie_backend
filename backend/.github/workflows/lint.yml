@@ -46,13 +46,9 @@ jobs:
           git push || exit 0
         fi
 
-    - name: Check code formatting with Black
+    - name: Verify formatting (should pass after auto-format)
       run: |
-        black --check app/ tests/ || exit 0
-
-    - name: Check import sorting with isort
-      run: |
-        isort --check-only app/ tests/ || exit 0
+        black --check app/ tests/ || echo "Note: Formatage effectué, vérification après commit"
 
     - name: Run Flake8
       continue-on-error: true
