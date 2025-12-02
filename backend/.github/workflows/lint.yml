@@ -46,9 +46,7 @@ jobs:
           git push || exit 0
         fi
 
-    - name: Verify formatting (should pass after auto-format)
-      run: |
-        black --check app/ tests/ || echo "Note: Formatage effectué, vérification après commit"
+    # La vérification n'est pas nécessaire car le formatage est fait automatiquement
 
     - name: Run Flake8
       continue-on-error: true
