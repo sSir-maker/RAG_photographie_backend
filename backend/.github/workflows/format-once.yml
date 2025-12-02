@@ -1,0 +1,43 @@
+name: Format Code Once (Manual)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    
+    - name: Install Black
+      run: |
+        pip install black
+    
+    - name: Format with Black
+      run: |
+        echo "Formatage des fichiers avec Black..."
+        black app/ tests/
+    
+    - name: Commit and push formatted code
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        if [ -n "$(git status --porcelain app/ tests/)" ]; then
+          echo "Changements détectés, commit automatique..."
+          git add app/ tests/
+          git commit -m "style: Format code with Black (Linux line endings)" || exit 0
+          git push || exit 0
+          echo "✓ Fichiers formatés et poussés avec succès"
+        else
+          echo "✓ Aucun changement nécessaire"
+        fi
+
