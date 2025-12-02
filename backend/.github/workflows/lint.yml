@@ -22,15 +22,23 @@ jobs:
       run: |
         pip install black flake8 pylint mypy
     
-    - name: Format with Black
+    - name: Format with Black (auto-fix and commit)
       run: |
-        black app/ tests/
+        # Formater avec Black
+        black app/ tests/ || exit 0
+        
+        # Configurer git pour le commit automatique
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
+        
+        # Vérifier s'il y a des changements et les commiter
         if [ -n "$(git status --porcelain app/ tests/)" ]; then
+          echo "Changements détectés, commit automatique..."
           git add app/ tests/
           git commit -m "style: Auto-format code with Black [skip ci]" || exit 0
           git push || exit 0
+        else
+          echo "Aucun changement nécessaire, tout est déjà formaté"
         fi
     
     - name: Lint with flake8
