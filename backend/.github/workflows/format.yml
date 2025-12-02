@@ -27,21 +27,13 @@ jobs:
       run: |
         black app/ tests/
     
-    - name: Check for changes
-      id: verify-changed-files
-      run: |
-        if [ -n "$(git status --porcelain)" ]; then
-          echo "changed=true" >> $GITHUB_OUTPUT
-        else
-          echo "changed=false" >> $GITHUB_OUTPUT
-        fi
-    
-    - name: Commit changes
-      if: steps.verify-changed-files.outputs.changed == 'true'
+    - name: Check for changes and commit
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add app/ tests/
-        git commit -m "style: Auto-format code with Black [skip ci]" || exit 0
-        git push
+        if [ -n "$(git status --porcelain)" ]; then
+          git add app/ tests/
+          git commit -m "style: Auto-format code with Black [skip ci]" || exit 0
+          git push || exit 0
+        fi
 
