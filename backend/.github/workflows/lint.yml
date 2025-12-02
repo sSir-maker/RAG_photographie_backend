@@ -22,20 +22,16 @@ jobs:
       run: |
         pip install black flake8 pylint mypy
     
-    - name: Format with Black (auto-fix)
+    - name: Format with Black
       run: |
-        black app/ tests/ || true
-        if [ -n "$(git status --porcelain)" ]; then
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+        black app/ tests/
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        if [ -n "$(git status --porcelain app/ tests/)" ]; then
           git add app/ tests/
           git commit -m "style: Auto-format code with Black [skip ci]" || exit 0
           git push || exit 0
         fi
-    
-    - name: Check formatting with Black
-      run: |
-        black --check app/ tests/ || (echo "Files need formatting. Auto-formatting..." && black app/ tests/ && git add app/ tests/ && git -c user.name="GitHub Action" -c user.email="action@github.com" commit -m "style: Auto-format code with Black" && git push || exit 0)
     
     - name: Lint with flake8
       continue-on-error: true
