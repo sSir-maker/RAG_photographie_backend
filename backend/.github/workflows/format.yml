@@ -1,0 +1,32 @@
+name: Auto-Format Code
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  format:
+    name: Format Python Code
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - run: pip install black
+    - run: black app/ tests/
+    - run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        if [ -n "$(git status --porcelain app/ tests/)" ]; then
+          git add app/ tests/
+          git commit -m "style: Auto-format code with Black [skip ci]" || exit 0
+          git push || exit 0
+        fi
+
