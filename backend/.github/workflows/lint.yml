@@ -1,4 +1,4 @@
-name: Lint and Format
+name: Format and Lint
 
 on:
   push:
@@ -28,16 +28,18 @@ jobs:
       run: |
         pip install black flake8 pylint mypy isort
 
-    - name: Format code with Black (auto-fix FIRST)
+    # ÉTAPE 1: FORMATAGE AUTOMATIQUE (AVANT TOUTE VÉRIFICATION)
+    - name: Format code with Black (AUTO-FIX FIRST)
       run: |
         echo "🔧 Formatage automatique des fichiers avec Black..."
         black app/ tests/ || true
         
-    - name: Auto-format with isort (auto-fix FIRST)
+    - name: Auto-format with isort (AUTO-FIX FIRST)
       run: |
         echo "🔧 Formatage automatique des imports avec isort..."
         isort app/ tests/ || true
 
+    # ÉTAPE 2: COMMIT DES FICHIERS FORMATÉS
     - name: Commit formatted code
       run: |
         git config --local user.email "action@github.com"
@@ -52,6 +54,7 @@ jobs:
           echo "✅ Aucun changement nécessaire, tout est déjà formaté"
         fi
 
+    # ÉTAPE 3: VÉRIFICATIONS NON-BLOQUANTES
     - name: Run Flake8 (non-blocking)
       continue-on-error: true
       run: |
