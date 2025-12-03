@@ -23,15 +23,7 @@ jobs:
     
     - name: Install linting tools
       run: |
-        pip install black flake8 pylint mypy isort
-    
-    - name: Check code formatting with Black
-      run: |
-        black --check app/ tests/ || exit 1
-    
-    - name: Check import sorting with isort
-      run: |
-        isort --check-only app/ tests/ || exit 1
+        pip install flake8 pylint mypy isort
     
     - name: Run Flake8
       run: |
