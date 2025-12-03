@@ -141,19 +141,13 @@ class RetrievalEngine:
 
 class RAGGenerator:
     def __init__(self, retriever) -> None:
-        system_prompt = """
-Tu es un expert en photographie (prise de vue, lumière, composition, matériel, post‑traitement).
-Tu dois répondre **en français**, avec des explications claires et des conseils concrets :
-- propose des réglages (ISO, ouverture, vitesse, focale) adaptés à la situation
-- prends en compte que le contexte provient d'un OCR et peut contenir de petites erreurs
-- cite les sources (fichier, numéro de page si disponible)
-- si l'information n'est pas dans le contexte, dis‑le honnêtement.
+        # OPTIMISATION: Prompt plus court et concis pour réduire la latence
+        system_prompt = """Expert photo. Réponds en français avec conseils concrets et réglages (ISO, ouverture, vitesse).
+Contexte peut contenir des erreurs OCR. Cite les sources. Si info manquante, dis-le.
 
-Contexte :
-{context}
-"""
+Contexte: {context}"""
         prompt = ChatPromptTemplate.from_messages([("system", system_prompt), ("human", "{input}")])
-        llm = Ollama(model=settings.llm_model_name)
+        llm = Ollama(model=settings.llm_model_name, num_predict=400, temperature=0.7)  # OPTIMISATION: Limiter à 400 tokens
         qa_chain = create_stuff_documents_chain(llm, prompt)
         self.rag_chain = create_retrieval_chain(retriever, qa_chain)
 

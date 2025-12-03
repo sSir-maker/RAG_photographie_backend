@@ -25,7 +25,10 @@ class Settings:
     streaming_delay: float = float(os.getenv("STREAMING_DELAY", "0.005"))  # 5ms par défaut (optimisé)
 
     # Nombre de documents à récupérer pour le RAG (défaut optimisé pour vitesse)
-    num_retrieval_docs: int = int(os.getenv("NUM_RETRIEVAL_DOCS", "3"))  # 3 au lieu de 4 pour plus de rapidité
+    num_retrieval_docs: int = int(os.getenv("NUM_RETRIEVAL_DOCS", "2"))  # 2 au lieu de 3 pour plus de rapidité
+
+    # Taille maximale du contexte (en caractères) pour limiter la latence
+    max_context_length: int = int(os.getenv("MAX_CONTEXT_LENGTH", "1500"))  # Limiter le contexte à 1500 caractères
 
 
 settings = Settings()
