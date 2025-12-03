@@ -5,9 +5,10 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  workflow_dispatch:
 
 jobs:
-  # JOB 1: FORMATAGE UNIQUEMENT - PAS DE VÉRIFICATION
+  # FORMATAGE AUTOMATIQUE - PAS DE VÉRIFICATION
   auto-format:
     name: Auto-Format Code
     runs-on: ubuntu-latest
@@ -31,7 +32,7 @@ jobs:
           git push || exit 0
         fi
 
-  # JOB 2: LINTING (dépend du formatage, non-bloquant)
+  # LINTING NON-BLOQUANT
   lint:
     name: Lint Code
     runs-on: ubuntu-latest
