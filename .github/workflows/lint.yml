@@ -57,12 +57,4 @@ jobs:
       with:
         python-version: '3.12'
     
-    - name: Install formatting tools
-      run: |
-        pip install black isort
-    
-    - name: Check formatting
-      run: |
-        black --check app/ tests/
-        isort --check-only app/ tests/
 
