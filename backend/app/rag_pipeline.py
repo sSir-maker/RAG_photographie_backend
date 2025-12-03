@@ -189,12 +189,17 @@ def answer_question(
 
     start_time = time.time()
 
+    # OPTIMISATION: Timing détaillé pour identifier les goulots d'étranglement
+    vs_start = time.time()
     vector_store = _load_or_build_vector_store(force_rebuild=force_rebuild)
+    vs_duration = (time.time() - vs_start) * 1000
+    logger.debug(f"📦 Vector store chargé en {vs_duration:.2f}ms")
+    
     retriever_engine = RetrievalEngine(vector_store)
 
     # Récupérer les documents pertinents AVANT de générer la réponse
     retriever = retriever_engine.get_retriever()
-    # OPTIMISATION: Réduire le nombre de documents récupérés pour plus de rapidité (3 au lieu de 4)
+    # OPTIMISATION: Réduire le nombre de documents récupérés pour plus de rapidité (2 au lieu de 3)
     if hasattr(retriever, "search_kwargs"):
         retriever.search_kwargs["k"] = num_docs
     else:
@@ -233,8 +238,11 @@ def answer_question(
     answer = result.get("answer", "")
     total_duration = (time.time() - start_time) * 1000  # ms
 
+    # OPTIMISATION: Logging détaillé avec timing complet
     logger.info(
-        f"⚡ RAG réponse générée en {total_duration:.2f}ms (retrieval: {retrieval_duration:.2f}ms, generation: {generation_duration:.2f}ms)"
+        f"⚡ RAG réponse générée en {total_duration:.2f}ms "
+        f"(vector_store: {vs_duration:.2f}ms, retrieval: {retrieval_duration:.2f}ms, "
+        f"generation: {generation_duration:.2f}ms)"
     )
 
     # Monitor génération et pipeline complet
@@ -279,9 +287,10 @@ def answer_question_stream(
     Args:
         question: La question à poser
         force_rebuild: Forcer la reconstruction du vector store
-        num_docs: Nombre de documents à récupérer (None = utiliser la valeur de la config, défaut optimisé: 3)
+        num_docs: Nombre de documents à récupérer (None = utiliser la valeur de la config, défaut optimisé: 2)
         streaming_delay: Délai entre les tokens (None = utiliser la valeur optimisée)
     """
+    start_time = time.time()  # OPTIMISATION: Timing pour le streaming
     try:
         from langchain_community.chat_models import ChatOllama
 
@@ -296,22 +305,29 @@ def answer_question_stream(
     if num_docs is None:
         num_docs = settings.num_retrieval_docs
 
-    # OPTIMISATION: Utiliser un délai de streaming réduit (5ms au lieu de 30ms par défaut)
+    # OPTIMISATION: Utiliser un délai de streaming réduit (0ms pour plus de rapidité)
     if streaming_delay is None:
-        streaming_delay = min(0.005, settings.streaming_delay)  # Max 5ms pour plus de fluidité
+        streaming_delay = 0.0  # OPTIMISATION: Pas de délai pour plus de rapidité
 
+    vs_start = time.time()
     vector_store = _load_or_build_vector_store(force_rebuild=force_rebuild)
+    vs_duration = (time.time() - vs_start) * 1000
+    logger.debug(f"📦 Vector store chargé en {vs_duration:.2f}ms")
+    
     retriever_engine = RetrievalEngine(vector_store)
 
     # Récupérer les documents pertinents AVANT de générer la réponse
     retriever = retriever_engine.get_retriever()
-    # OPTIMISATION: Réduire le nombre de documents pour plus de rapidité
+    # OPTIMISATION: Réduire le nombre de documents pour plus de rapidité (2 par défaut)
     if hasattr(retriever, "search_kwargs"):
         retriever.search_kwargs["k"] = num_docs
     else:
         retriever = vector_store.as_retriever(search_kwargs={"k": num_docs})
 
+    retrieval_start = time.time()
     retrieved_docs = retriever.invoke(question)
+    retrieval_duration = (time.time() - retrieval_start) * 1000
+    logger.debug(f"🔍 Recherche vectorielle en {retrieval_duration:.2f}ms")
 
     # Préparer les sources
     sources = []
@@ -324,21 +340,28 @@ def answer_question_stream(
         }
         sources.append(source_info)
 
-    # Construire le contexte à partir des documents récupérés
-    context = "\n\n".join([doc.page_content for doc in retrieved_docs])
+    # OPTIMISATION: Tronquer intelligemment le contexte pour réduire la latence
+    max_context_chars = getattr(settings, 'max_context_length', 1500)
+    context_parts = []
+    current_length = 0
+    for doc in retrieved_docs:
+        content = doc.page_content[:500]  # Limiter chaque doc à 500 caractères
+        if current_length + len(content) <= max_context_chars:
+            context_parts.append(content)
+            current_length += len(content)
+        else:
+            # Ajouter le reste jusqu'à la limite
+            remaining = max_context_chars - current_length
+            if remaining > 100:  # Ne pas ajouter de trop petits fragments
+                context_parts.append(content[:remaining])
+            break
+    context = "\n\n".join(context_parts)
 
-    # Créer le prompt avec le contexte
-    system_prompt = """
-Tu es un expert en photographie (prise de vue, lumière, composition, matériel, post‑traitement).
-Tu dois répondre **en français**, avec des explications claires et des conseils concrets :
-- propose des réglages (ISO, ouverture, vitesse, focale) adaptés à la situation
-- prends en compte que le contexte provient d'un OCR et peut contenir de petites erreurs
-- cite les sources (fichier, numéro de page si disponible)
-- si l'information n'est pas dans le contexte, dis‑le honnêtement.
+    # OPTIMISATION: Prompt plus court et concis
+    system_prompt = """Expert photo. Réponds en français avec conseils concrets et réglages (ISO, ouverture, vitesse).
+Contexte peut contenir des erreurs OCR. Cite les sources. Si info manquante, dis-le.
 
-Contexte :
-{context}
-"""
+Contexte: {context}"""
     prompt = ChatPromptTemplate.from_messages([("system", system_prompt), ("human", "{input}")])
 
     # Formater le prompt avec le contexte et la question
@@ -349,13 +372,13 @@ Contexte :
         llm = ChatOllama(
             model=settings.llm_model_name,
             temperature=0.7,
-            num_predict=512,  # Limiter la longueur de réponse pour plus de rapidité
+            num_predict=400,  # OPTIMISATION: Réduire à 400 tokens pour plus de rapidité
         )
     else:
         llm = Ollama(
             model=settings.llm_model_name,
             temperature=0.7,
-            num_predict=512,
+            num_predict=400,  # OPTIMISATION: Réduire à 400 tokens pour plus de rapidité
         )
 
     full_answer = ""
@@ -410,5 +433,12 @@ Contexte :
         except Exception as e2:
             raise RuntimeError(f"Erreur lors de la génération: {str(e2)}") from e2
 
+    # OPTIMISATION: Logging du temps total de streaming
+    total_duration = (time.time() - start_time) * 1000
+    logger.info(
+        f"⚡ Streaming RAG terminé en {total_duration:.2f}ms "
+        f"(vector_store: {vs_duration:.2f}ms, retrieval: {retrieval_duration:.2f}ms)"
+    )
+    
     # Retourner les sources à la fin
     yield {"sources": sources, "full_answer": full_answer}
