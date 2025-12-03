@@ -9,7 +9,7 @@ on:
 
 jobs:
   format-then-lint:
-    name: Format and Lint Python Code
+    name: Format and Lint
     runs-on: ubuntu-latest
 
     steps:
@@ -24,19 +24,17 @@ jobs:
         python-version: '3.12'
         cache: 'pip'
 
-    - name: Install linting tools
+    - name: Install tools
       run: |
         pip install black flake8 pylint mypy isort
 
-    # FORMATAGE AUTOMATIQUE EN PREMIER - PAS DE VÉRIFICATION AVANT
-    - name: Format code with Black
+    # FORMATAGE EN PREMIER - PAS DE VÉRIFICATION
+    - name: Format with Black
       run: |
-        echo "🔧 Formatage automatique des fichiers avec Black..."
         black app/ tests/
         
-    - name: Format imports with isort
+    - name: Format with isort
       run: |
-        echo "🔧 Formatage automatique des imports avec isort..."
         isort app/ tests/
 
     - name: Commit formatted code
@@ -44,30 +42,23 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         if [ -n "$(git status --porcelain app/ tests/)" ]; then
-          echo "📝 Changements détectés, commit automatique..."
           git add app/ tests/
-          git commit -m "style: Auto-format code with Black and isort [skip ci]" || exit 0
+          git commit -m "style: Auto-format code [skip ci]" || exit 0
           git push || exit 0
-          echo "✅ Fichiers formatés et poussés automatiquement"
-        else
-          echo "✅ Aucun changement nécessaire, tout est déjà formaté"
         fi
 
-    # VÉRIFICATIONS NON-BLOQUANTES (continue-on-error)
-    - name: Run Flake8
+    # VÉRIFICATIONS NON-BLOQUANTES
+    - name: Flake8
       continue-on-error: true
       run: |
-        echo "🔍 Vérification avec Flake8..."
         flake8 app/ tests/ --max-line-length=120 --extend-ignore=E203,W503,E501 || true
 
-    - name: Run Pylint
+    - name: Pylint
       continue-on-error: true
       run: |
-        echo "🔍 Vérification avec Pylint..."
         pylint app/ --disable=C0111,C0103,R0913,R0903,W0613 || true
 
-    - name: Run MyPy
+    - name: MyPy
       continue-on-error: true
       run: |
-        echo "🔍 Vérification avec MyPy..."
         mypy app/ --ignore-missing-imports --no-strict-optional || true
