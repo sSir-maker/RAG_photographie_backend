@@ -1,14 +1,22 @@
 name: Deploy to Production
 
+# DÉSACTIVÉ: Ce workflow nécessite des secrets SSH non configurés.
+# Le déploiement se fait via Render (déploiement automatique depuis GitHub).
+# Pour activer ce workflow, configurez les secrets GitHub: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY
+
+# on:
+#   push:
+#     branches: [ main ]
+#   workflow_dispatch:
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
+    # Ne s'exécute que si les secrets SSH sont configurés
+    if: ${{ secrets.DEPLOY_HOST }}
     
     steps:
     - uses: actions/checkout@v4
