@@ -125,8 +125,8 @@ jobs:
         tags: |
           ${{ secrets.DOCKER_USERNAME }}/rag-photographie-frontend:latest
           ${{ secrets.DOCKER_USERNAME }}/rag-photographie-frontend:${{ github.sha }}
-        cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/rag-photographie-frontend:latest
-        cache-to: type=inline
+        # Désactiver le cache pour éviter les problèmes avec des stages incomplets
+        no-cache: true
 
   deploy:
     name: Deploy to Production
