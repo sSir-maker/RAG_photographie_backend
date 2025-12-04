@@ -10,6 +10,8 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, EmailStr, validator
 from typing import List, Optional
 from fastapi import Query
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 import json
 import re
 import html
@@ -78,6 +80,38 @@ if frontend_url and frontend_url not in default_origins:
 # Logger les origines CORS configurées
 logger.info(f"CORS origins configurés: {default_origins}")
 
+# Middleware CORS personnalisé pour garantir que les headers sont toujours présents
+class CustomCORSMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        origin = request.headers.get("origin")
+        
+        # Gérer les requêtes OPTIONS (preflight)
+        if request.method == "OPTIONS":
+            response = Response()
+            if origin and (origin in default_origins or "rag-photographie-frontend.onrender.com" in origin):
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+                response.headers["Access-Control-Allow-Headers"] = "*"
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Access-Control-Max-Age"] = "3600"
+            return response
+        
+        # Traiter la requête normale
+        response = await call_next(request)
+        
+        # Ajouter les headers CORS à toutes les réponses
+        if origin and (origin in default_origins or "rag-photographie-frontend.onrender.com" in origin):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+        
+        return response
+
+# Ajouter le middleware CORS personnalisé
+app.add_middleware(CustomCORSMiddleware)
+
+# Ajouter aussi le middleware CORS standard de FastAPI en backup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=default_origins,
