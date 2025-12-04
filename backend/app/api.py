@@ -4,8 +4,9 @@ API FastAPI pour exposer le RAG photographie au frontend.
 
 from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, EmailStr, validator
 from typing import List, Optional
 from fastapi import Query
@@ -52,7 +53,59 @@ app = FastAPI(title="RAG Photographie API", version="1.0.0")
 # Rate Limiting
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+# Gestionnaire personnalisé pour le rate limiting (retourne JSON au lieu de HTML)
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    """Gestionnaire personnalisé pour les erreurs de rate limiting (retourne JSON)."""
+    response = JSONResponse(
+        status_code=429,
+        content={
+            "detail": "Trop de requêtes. Veuillez réessayer plus tard.",
+            "retry_after": str(exc.retry_after) if exc.retry_after else None,
+        },
+        headers={"Retry-After": str(exc.retry_after)} if exc.retry_after else {},
+    )
+    return response
+
+
+# Gestionnaire d'exceptions global pour garantir des réponses JSON
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Gestionnaire d'exceptions global pour retourner du JSON au lieu de HTML."""
+    logger.error(f"Exception non gérée: {type(exc).__name__}: {str(exc)}", exc_info=True)
+    
+    # Si c'est déjà une HTTPException, la retourner en JSON
+    if isinstance(exc, HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=exc.headers,
+        )
+    
+    # Pour toutes les autres exceptions, retourner une erreur 500 en JSON
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Erreur interne du serveur",
+            "error": str(exc),
+            "type": type(exc).__name__,
+        },
+    )
+
+
+# Gestionnaire pour les erreurs de validation Pydantic
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Gestionnaire pour les erreurs de validation Pydantic (retourne JSON)."""
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": "Erreur de validation",
+            "errors": exc.errors(),
+        },
+    )
 
 
 # Initialiser la base de données au démarrage
@@ -266,26 +319,49 @@ async def signup(request: Request, signup_data: SignupRequest, db: Session = Dep
     """
     Inscription d'un nouvel utilisateur.
     """
-    # Créer l'utilisateur dans la base de données
-    user = create_user_db(db, signup_data.name, signup_data.email, signup_data.password)
+    try:
+        logger.info(f"Tentative d'inscription pour: {signup_data.email}")
+        
+        # Créer l'utilisateur dans la base de données
+        user = create_user_db(db, signup_data.name, signup_data.email, signup_data.password)
 
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cet email est déjà utilisé",
+        if user is None:
+            logger.warning(f"Échec d'inscription pour: {signup_data.email} (email déjà utilisé)")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cet email est déjà utilisé",
+            )
+
+        # Créer le token
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user["email"], "name": user["name"]},
+            expires_delta=access_token_expires,
         )
 
-    # Créer le token
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user["email"], "name": user["name"]},
-        expires_delta=access_token_expires,
-    )
-
-    return AuthResponse(
-        access_token=access_token,
-        user=user,
-    )
+        logger.info(f"Inscription réussie pour: {signup_data.email}")
+        
+        # Forcer le Content-Type à application/json
+        response_data = AuthResponse(
+            access_token=access_token,
+            user=user,
+        )
+        
+        return JSONResponse(
+            status_code=200,
+            content=response_data.dict(),
+            headers={"Content-Type": "application/json"},
+        )
+        
+    except HTTPException:
+        # Relancer les HTTPException telles quelles (elles seront gérées par le gestionnaire)
+        raise
+    except Exception as e:
+        logger.error(f"Erreur inattendue lors de l'inscription: {type(e).__name__}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de l'inscription: {str(e)}",
+        )
 
 
 @app.post("/auth/login", response_model=AuthResponse)
@@ -294,26 +370,49 @@ async def login(request: Request, login_data: LoginRequest, db: Session = Depend
     """
     Connexion d'un utilisateur existant.
     """
-    user = authenticate_user_db(db, login_data.email, login_data.password)
+    try:
+        logger.info(f"Tentative de connexion pour: {login_data.email}")
+        
+        user = authenticate_user_db(db, login_data.email, login_data.password)
 
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email ou mot de passe incorrect",
-            headers={"WWW-Authenticate": "Bearer"},
+        if user is None:
+            logger.warning(f"Échec de connexion pour: {login_data.email} (email ou mot de passe incorrect)")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Email ou mot de passe incorrect",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # Créer le token
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user["email"], "name": user["name"]},
+            expires_delta=access_token_expires,
         )
 
-    # Créer le token
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user["email"], "name": user["name"]},
-        expires_delta=access_token_expires,
-    )
-
-    return AuthResponse(
-        access_token=access_token,
-        user=user,
-    )
+        logger.info(f"Connexion réussie pour: {login_data.email}")
+        
+        # Forcer le Content-Type à application/json
+        response_data = AuthResponse(
+            access_token=access_token,
+            user=user,
+        )
+        
+        return JSONResponse(
+            status_code=200,
+            content=response_data.dict(),
+            headers={"Content-Type": "application/json"},
+        )
+        
+    except HTTPException:
+        # Relancer les HTTPException telles quelles (elles seront gérées par le gestionnaire)
+        raise
+    except Exception as e:
+        logger.error(f"Erreur inattendue lors de la connexion: {type(e).__name__}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la connexion: {str(e)}",
+        )
 
 
 @app.get("/auth/me")
@@ -818,24 +917,6 @@ async def get_llm_info(llm_name: str, current_user: User = Depends(get_current_u
         return manager.get_llm_info(llm_name)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-
-
-@app.post("/ask")
-@limiter.limit("20/minute")
-async def ask_question_with_llm(
-    request: Request,
-    conversation_data: ConversationRequest,
-    llm_name: Optional[str] = Query(None),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """
-    Pose une question au RAG avec un LLM spécifique.
-    Si llm_name n'est pas fourni, utilise le LLM par défaut.
-    """
-    # TODO: Modifier answer_question pour accepter un paramètre llm_name
-    # Pour l'instant, on utilise le comportement par défaut
-    return await ask_question(request, conversation_data, current_user, db)
 
 
 if __name__ == "__main__":
