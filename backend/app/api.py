@@ -80,18 +80,32 @@ if frontend_url and frontend_url not in default_origins:
 # Logger les origines CORS configurées
 logger.info(f"CORS origins configurés: {default_origins}")
 
+# Fonction helper pour vérifier si une origine est autorisée
+def is_origin_allowed(origin: Optional[str]) -> bool:
+    """Vérifie si une origine est autorisée pour CORS."""
+    if not origin:
+        return False
+    # Vérifier si l'origine est dans la liste autorisée
+    if origin in default_origins:
+        return True
+    # Vérifier si c'est le frontend Render
+    if "rag-photographie-frontend.onrender.com" in origin:
+        return True
+    return False
+
 # Middleware CORS personnalisé pour garantir que les headers sont toujours présents
 class CustomCORSMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         origin = request.headers.get("origin")
+        is_allowed = is_origin_allowed(origin)
         
         # Gérer les requêtes OPTIONS (preflight)
         if request.method == "OPTIONS":
-            response = Response()
-            if origin and (origin in default_origins or "rag-photographie-frontend.onrender.com" in origin):
+            response = Response(status_code=200)
+            if is_allowed:
                 response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-                response.headers["Access-Control-Allow-Headers"] = "*"
+                response.headers["Access-Control-Allow-Headers"] = request.headers.get("access-control-request-headers", "*")
                 response.headers["Access-Control-Allow-Credentials"] = "true"
                 response.headers["Access-Control-Max-Age"] = "3600"
             return response
@@ -100,11 +114,12 @@ class CustomCORSMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         
         # Ajouter les headers CORS à toutes les réponses
-        if origin and (origin in default_origins or "rag-photographie-frontend.onrender.com" in origin):
+        if is_allowed:
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
             response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
             response.headers["Access-Control-Allow-Headers"] = "*"
+            response.headers["Access-Control-Expose-Headers"] = "*"
         
         return response
 
@@ -130,7 +145,7 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     # Obtenir l'origine de la requête pour les headers CORS
     origin = request.headers.get("origin")
     cors_headers = {}
-    if origin in default_origins:
+    if is_origin_allowed(origin):
         cors_headers = {
             "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Credentials": "true",
@@ -156,7 +171,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     # Obtenir l'origine de la requête pour les headers CORS
     origin = request.headers.get("origin")
     cors_headers = {}
-    if origin in default_origins:
+    if is_origin_allowed(origin):
         cors_headers = {
             "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Credentials": "true",
@@ -189,7 +204,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     # Obtenir l'origine de la requête pour les headers CORS
     origin = request.headers.get("origin")
     cors_headers = {}
-    if origin in default_origins:
+    if is_origin_allowed(origin):
         cors_headers = {
             "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Credentials": "true",
@@ -653,22 +668,6 @@ async def generate_streaming_response(
         yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
 
-@app.options("/ask/stream")
-async def ask_question_stream_options():
-    """Gère les requêtes OPTIONS pour le streaming (CORS preflight)."""
-    from fastapi.responses import Response
-
-    return Response(
-        status_code=200,
-        headers={
-            "Access-Control-Allow-Origin": "http://localhost:3000",
-            "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        },
-    )
-
-
 @app.post("/ask/stream")
 @limiter.limit("20/minute")  # 20 requêtes par minute par utilisateur
 async def ask_question_stream(
@@ -693,6 +692,15 @@ async def ask_question_stream(
         # Ajouter le message utilisateur
         add_message(db, conversation.id, "user", conversation_data.question)
 
+        # Récupérer l'origine pour les headers CORS
+        origin = request.headers.get("origin")
+        cors_headers = {}
+        if is_origin_allowed(origin):
+            cors_headers = {
+                "Access-Control-Allow-Origin": origin,
+                "Access-Control-Allow-Credentials": "true",
+            }
+
         return StreamingResponse(
             generate_streaming_response(
                 conversation_data.question, conversation.id, db, current_user, conversation_data.force_rebuild
@@ -702,10 +710,7 @@ async def ask_question_stream(
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
                 "X-Accel-Buffering": "no",
-                "Access-Control-Allow-Origin": "http://localhost:3000",
-                "Access-Control-Allow-Credentials": "true",
-                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                "Access-Control-Allow-Headers": "*",
+                **cors_headers,
             },
         )
     except HTTPException:
@@ -716,6 +721,15 @@ async def ask_question_stream(
         error_details = traceback.format_exc()
         print(f"Erreur dans ask_question_stream: {error_details}")
 
+        # Récupérer l'origine pour les headers CORS
+        origin = request.headers.get("origin")
+        cors_headers = {}
+        if is_origin_allowed(origin):
+            cors_headers = {
+                "Access-Control-Allow-Origin": origin,
+                "Access-Control-Allow-Credentials": "true",
+            }
+
         # Retourner une réponse d'erreur en streaming
         async def error_stream():
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
@@ -724,12 +738,7 @@ async def ask_question_stream(
             error_stream(),
             media_type="text/event-stream",
             status_code=500,
-            headers={
-                "Access-Control-Allow-Origin": "http://localhost:3000",
-                "Access-Control-Allow-Credentials": "true",
-                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                "Access-Control-Allow-Headers": "*",
-            },
+            headers=cors_headers,
         )
 
 
