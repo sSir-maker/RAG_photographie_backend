@@ -15,8 +15,8 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
-    # Ne s'exécute que si les secrets SSH sont configurés
-    if: ${{ secrets.DEPLOY_HOST }}
+    # Note: Si les secrets SSH ne sont pas configurés, le job échouera lors de l'exécution
+    # Ce workflow est désactivé par défaut (workflow_dispatch uniquement)
     
     steps:
     - uses: actions/checkout@v4
