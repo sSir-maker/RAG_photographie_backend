@@ -96,16 +96,16 @@ jobs:
       uses: docker/setup-buildx-action@v3
     
     # Note: Les étapes Docker Hub nécessitent les secrets DOCKER_USERNAME et DOCKER_PASSWORD
-    # Si les secrets ne sont pas configurés, ces étapes seront ignorées
+    # Username configuré : nassir13434
     - name: Login to Docker Hub
-      if: github.event_name != 'pull_request' && secrets.DOCKER_USERNAME != ''
+      if: github.event_name != 'pull_request'
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
     
     - name: Build and push backend image
-      if: github.event_name != 'pull_request' && secrets.DOCKER_USERNAME != ''
+      if: github.event_name != 'pull_request'
       uses: docker/build-push-action@v5
       with:
         context: .
@@ -117,7 +117,7 @@ jobs:
         cache-to: type=inline
     
     - name: Build and push frontend image
-      if: github.event_name != 'pull_request' && secrets.DOCKER_USERNAME != ''
+      if: github.event_name != 'pull_request'
       uses: docker/build-push-action@v5
       with:
         context: ./frontend_RAG
