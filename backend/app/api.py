@@ -54,74 +54,7 @@ app = FastAPI(title="RAG Photographie API", version="1.0.0")
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 
-
-# Gestionnaire personnalisé pour le rate limiting (retourne JSON au lieu de HTML)
-@app.exception_handler(RateLimitExceeded)
-async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
-    """Gestionnaire personnalisé pour les erreurs de rate limiting (retourne JSON)."""
-    response = JSONResponse(
-        status_code=429,
-        content={
-            "detail": "Trop de requêtes. Veuillez réessayer plus tard.",
-            "retry_after": str(exc.retry_after) if exc.retry_after else None,
-        },
-        headers={"Retry-After": str(exc.retry_after)} if exc.retry_after else {},
-    )
-    return response
-
-
-# Gestionnaire d'exceptions global pour garantir des réponses JSON
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    """Gestionnaire d'exceptions global pour retourner du JSON au lieu de HTML."""
-    logger.error(f"Exception non gérée: {type(exc).__name__}: {str(exc)}", exc_info=True)
-    
-    # Si c'est déjà une HTTPException, la retourner en JSON
-    if isinstance(exc, HTTPException):
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={"detail": exc.detail},
-            headers=exc.headers,
-        )
-    
-    # Pour toutes les autres exceptions, retourner une erreur 500 en JSON
-    return JSONResponse(
-        status_code=500,
-        content={
-            "detail": "Erreur interne du serveur",
-            "error": str(exc),
-            "type": type(exc).__name__,
-        },
-    )
-
-
-# Gestionnaire pour les erreurs de validation Pydantic
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Gestionnaire pour les erreurs de validation Pydantic (retourne JSON)."""
-    return JSONResponse(
-        status_code=422,
-        content={
-            "detail": "Erreur de validation",
-            "errors": exc.errors(),
-        },
-    )
-
-
-# Initialiser la base de données au démarrage
-@app.on_event("startup")
-async def startup_event():
-    init_db()
-
-    # Initialiser Phoenix monitoring
-    try:
-        phoenix_endpoint = os.getenv("PHOENIX_ENDPOINT", "http://localhost:6006")
-        initialize_phoenix(endpoint=phoenix_endpoint)
-        logger.info(f"Phoenix monitoring initialisé (endpoint: {phoenix_endpoint})")
-    except Exception as e:
-        logger.warning(f"Phoenix monitoring non disponible: {e}")
-
-
+# ⚠️ IMPORTANT: CORS DOIT être configuré AVANT les gestionnaires d'exceptions
 # CORS pour permettre les requêtes depuis le frontend (Vite ou Next.js)
 # Configuration depuis les variables d'environnement
 default_origins = [
@@ -142,6 +75,9 @@ frontend_url = os.getenv("FRONTEND_URL")
 if frontend_url and frontend_url not in default_origins:
     default_origins.append(frontend_url)
 
+# Logger les origines CORS configurées
+logger.info(f"CORS origins configurés: {default_origins}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=default_origins,
@@ -151,6 +87,102 @@ app.add_middleware(
     expose_headers=["*"],  # Exposer tous les headers pour le streaming
     max_age=3600,  # Cache preflight requests for 1 hour (optimisation mobile)
 )
+
+
+# Gestionnaire personnalisé pour le rate limiting (retourne JSON au lieu de HTML)
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    """Gestionnaire personnalisé pour les erreurs de rate limiting (retourne JSON)."""
+    # Obtenir l'origine de la requête pour les headers CORS
+    origin = request.headers.get("origin")
+    cors_headers = {}
+    if origin in default_origins:
+        cors_headers = {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+        }
+    
+    response = JSONResponse(
+        status_code=429,
+        content={
+            "detail": "Trop de requêtes. Veuillez réessayer plus tard.",
+            "retry_after": str(exc.retry_after) if exc.retry_after else None,
+        },
+        headers={**cors_headers, **({"Retry-After": str(exc.retry_after)} if exc.retry_after else {})},
+    )
+    return response
+
+
+# Gestionnaire d'exceptions global pour garantir des réponses JSON
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Gestionnaire d'exceptions global pour retourner du JSON au lieu de HTML."""
+    logger.error(f"Exception non gérée: {type(exc).__name__}: {str(exc)}", exc_info=True)
+    
+    # Obtenir l'origine de la requête pour les headers CORS
+    origin = request.headers.get("origin")
+    cors_headers = {}
+    if origin in default_origins:
+        cors_headers = {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+        }
+    
+    # Si c'est déjà une HTTPException, la retourner en JSON
+    if isinstance(exc, HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers={**cors_headers, **(exc.headers or {})},
+        )
+    
+    # Pour toutes les autres exceptions, retourner une erreur 500 en JSON
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Erreur interne du serveur",
+            "error": str(exc),
+            "type": type(exc).__name__,
+        },
+        headers=cors_headers,
+    )
+
+
+# Gestionnaire pour les erreurs de validation Pydantic
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Gestionnaire pour les erreurs de validation Pydantic (retourne JSON)."""
+    # Obtenir l'origine de la requête pour les headers CORS
+    origin = request.headers.get("origin")
+    cors_headers = {}
+    if origin in default_origins:
+        cors_headers = {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+        }
+    
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": "Erreur de validation",
+            "errors": exc.errors(),
+        },
+        headers=cors_headers,
+    )
+
+
+# Initialiser la base de données au démarrage
+@app.on_event("startup")
+async def startup_event():
+    init_db()
+
+    # Initialiser Phoenix monitoring
+    try:
+        phoenix_endpoint = os.getenv("PHOENIX_ENDPOINT", "http://localhost:6006")
+        initialize_phoenix(endpoint=phoenix_endpoint)
+        logger.info(f"Phoenix monitoring initialisé (endpoint: {phoenix_endpoint})")
+    except Exception as e:
+        logger.warning(f"Phoenix monitoring non disponible: {e}")
 
 
 # Sécurité pour les tokens JWT
@@ -246,6 +278,25 @@ class AnswerResponse(BaseModel):
     answer: str
     sources: List[SourceInfo]
     num_sources: int
+
+
+@app.options("/{full_path:path}")
+async def options_handler(full_path: str, request: Request):
+    """Gère les requêtes OPTIONS (preflight CORS) pour tous les endpoints."""
+    origin = request.headers.get("origin")
+    if origin in default_origins:
+        from fastapi.responses import Response
+        return Response(
+            status_code=200,
+            headers={
+                "Access-Control-Allow-Origin": origin,
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Max-Age": "3600",
+            },
+        )
+    return Response(status_code=200)
 
 
 @app.get("/")
