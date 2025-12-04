@@ -283,19 +283,38 @@ class AnswerResponse(BaseModel):
 @app.options("/{full_path:path}")
 async def options_handler(full_path: str, request: Request):
     """Gère les requêtes OPTIONS (preflight CORS) pour tous les endpoints."""
+    from fastapi.responses import Response
+    
     origin = request.headers.get("origin")
-    if origin in default_origins:
-        from fastapi.responses import Response
+    requested_method = request.headers.get("access-control-request-method", "GET, POST, PUT, DELETE, OPTIONS")
+    requested_headers = request.headers.get("access-control-request-headers", "*")
+    
+    # Vérifier si l'origine est autorisée
+    if origin and origin in default_origins:
         return Response(
             status_code=200,
             headers={
                 "Access-Control-Allow-Origin": origin,
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+                "Access-Control-Allow-Headers": requested_headers or "*",
                 "Access-Control-Allow-Credentials": "true",
                 "Access-Control-Max-Age": "3600",
             },
         )
+    # Si l'origine n'est pas dans la liste mais est le frontend Render, l'accepter quand même
+    elif origin and "rag-photographie-frontend.onrender.com" in origin:
+        return Response(
+            status_code=200,
+            headers={
+                "Access-Control-Allow-Origin": origin,
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+                "Access-Control-Allow-Headers": requested_headers or "*",
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Max-Age": "3600",
+            },
+        )
+    
+    # Retourner une réponse 200 même si l'origine n'est pas autorisée (pour éviter les erreurs)
     return Response(status_code=200)
 
 
@@ -304,13 +323,48 @@ async def root():
     return {"message": "RAG Photographie API", "status": "running"}
 
 
+@app.options("/health")
+async def health_options(request: Request):
+    """Gère les requêtes OPTIONS pour /health (CORS preflight)."""
+    from fastapi.responses import Response
+    
+    origin = request.headers.get("origin")
+    if origin and (origin in default_origins or "rag-photographie-frontend.onrender.com" in origin):
+        return Response(
+            status_code=200,
+            headers={
+                "Access-Control-Allow-Origin": origin,
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Max-Age": "3600",
+            },
+        )
+    return Response(status_code=200)
+
+
 @app.get("/health")
-async def health():
+async def health(request: Request):
     """Endpoint de santé basique."""
     from .health import HealthChecker
 
     checker = HealthChecker()
-    return checker.get_system_health()
+    health_data = checker.get_system_health()
+    
+    # Ajouter les headers CORS manuellement pour garantir qu'ils sont présents
+    origin = request.headers.get("origin")
+    cors_headers = {}
+    if origin and (origin in default_origins or "rag-photographie-frontend.onrender.com" in origin):
+        cors_headers = {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+        }
+    
+    return JSONResponse(
+        status_code=200,
+        content=health_data,
+        headers=cors_headers,
+    )
 
 
 @app.get("/health/detailed")
