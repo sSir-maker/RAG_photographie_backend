@@ -96,6 +96,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],  # Exposer tous les headers pour le streaming
+    max_age=3600,  # Cache preflight requests for 1 hour (optimisation mobile)
 )
 
 
