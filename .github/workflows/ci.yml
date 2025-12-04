@@ -126,8 +126,9 @@ jobs:
     name: Deploy to Production
     runs-on: ubuntu-latest
     needs: [test, build]
-    # Ne s'exécute que si les secrets SSH sont configurés ET sur la branche main
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && secrets.DEPLOY_HOST
+    # Ne s'exécute que sur la branche main lors d'un push
+    # Note: Si les secrets SSH ne sont pas configurés, le job échouera lors de l'exécution
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
     steps:
     - uses: actions/checkout@v4
