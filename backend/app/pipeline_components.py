@@ -13,12 +13,12 @@ except ImportError:
     # Fallback pour compatibilité
     from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain_community.llms import Ollama
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 
 from .config import settings
+from .llm_manager import get_llm_manager
 from .ocr_pipeline import ocr_any
 
 
@@ -147,7 +147,9 @@ Contexte peut contenir des erreurs OCR. Cite les sources. Si info manquante, dis
 
 Contexte: {context}"""
         prompt = ChatPromptTemplate.from_messages([("system", system_prompt), ("human", "{input}")])
-        llm = Ollama(model=settings.llm_model_name, num_predict=400, temperature=0.7)  # OPTIMISATION: Limiter à 400 tokens
+        # Utiliser le gestionnaire LLM pour obtenir le LLM configuré (Grok, Ollama, etc.)
+        llm_manager = get_llm_manager()
+        llm = llm_manager.get_llm()  # Utilise le LLM par défaut (Grok si configuré)
         qa_chain = create_stuff_documents_chain(llm, prompt)
         self.rag_chain = create_retrieval_chain(retriever, qa_chain)
 

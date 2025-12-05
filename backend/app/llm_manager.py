@@ -15,6 +15,7 @@ class LLMProvider(Enum):
 
     OLLAMA = "ollama"
     OPENAI = "openai"
+    GROK = "grok"  # X.AI Grok (API compatible OpenAI)
     HUGGINGFACE = "huggingface"
     ANTHROPIC = "anthropic"
 
@@ -53,12 +54,21 @@ class LLMManager:
 
     def _initialize_default_llms(self):
         """Initialise les LLM par défaut depuis les variables d'environnement."""
-        # Ollama (par défaut)
-        ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-        ollama_model = os.getenv("LLM_MODEL_NAME", "llama3")
+        # Grok (X.AI) - Priorité si configuré
+        grok_api_key = os.getenv("GROK_API_KEY") or os.getenv("XAI_API_KEY")
+        if grok_api_key:
+            grok_model = os.getenv("GROK_MODEL", "grok-beta")
+            grok_base_url = os.getenv("GROK_BASE_URL", "https://api.x.ai/v1")
+            self.add_llm("grok_default", LLMProvider.GROK, grok_model, base_url=grok_base_url, api_key=grok_api_key)
+            self.set_default("grok_default")
+            logger.info("🚀 Grok (X.AI) configuré comme LLM par défaut")
 
-        self.add_llm("ollama_default", LLMProvider.OLLAMA, ollama_model, base_url=ollama_base_url)
-        self.set_default("ollama_default")
+        # Ollama (fallback si Grok non configuré)
+        if not self.default_llm:
+            ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+            ollama_model = os.getenv("LLM_MODEL_NAME", "llama3")
+            self.add_llm("ollama_default", LLMProvider.OLLAMA, ollama_model, base_url=ollama_base_url)
+            self.set_default("ollama_default")
 
         # OpenAI (si configuré)
         openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -133,6 +143,19 @@ class LLMManager:
             return ChatOpenAI(
                 model_name=config.model_name,
                 api_key=config.api_key,
+                temperature=config.temperature,
+                max_tokens=config.max_tokens,
+                **config.extra_params,
+            )
+
+        elif config.provider == LLMProvider.GROK:
+            # Grok (X.AI) utilise une API compatible OpenAI
+            from langchain_openai import ChatOpenAI
+
+            return ChatOpenAI(
+                model=config.model_name,
+                api_key=config.api_key,
+                base_url=config.base_url,
                 temperature=config.temperature,
                 max_tokens=config.max_tokens,
                 **config.extra_params,

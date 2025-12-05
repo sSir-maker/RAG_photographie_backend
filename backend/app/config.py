@@ -17,7 +17,8 @@ class Settings:
         "sentence-transformers/all-MiniLM-L6-v2",
     )
 
-    # LLM : par défaut on suppose un LLM accessible via Ollama en local
+    # LLM : par défaut on utilise Ollama en local, mais peut être remplacé par Grok (X.AI)
+    # Pour utiliser Grok, configurez GROK_API_KEY (ou XAI_API_KEY) dans les variables d'environnement
     llm_model_name: str = os.getenv("LLM_MODEL_NAME", "llama3")
 
     # Vitesse du streaming (délai en secondes entre chaque token)

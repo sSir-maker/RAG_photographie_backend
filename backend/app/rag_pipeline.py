@@ -20,6 +20,7 @@ from .pipeline_components import (
 )
 from .monitoring_phoenix import get_phoenix_monitor
 from .cache import get_cache_manager
+from .llm_manager import get_llm_manager
 import hashlib
 import logging
 
@@ -291,14 +292,6 @@ def answer_question_stream(
         streaming_delay: Délai entre les tokens (None = utiliser la valeur optimisée)
     """
     start_time = time.time()  # OPTIMISATION: Timing pour le streaming
-    try:
-        from langchain_community.chat_models import ChatOllama
-
-        use_chat_ollama = True
-    except ImportError:
-        from langchain_community.llms import Ollama
-
-        use_chat_ollama = False
     from langchain_core.prompts import ChatPromptTemplate
 
     # Utiliser la valeur de la config si non spécifiée
@@ -367,19 +360,9 @@ Contexte: {context}"""
     # Formater le prompt avec le contexte et la question
     formatted_prompt = prompt.format_messages(context=context, input=question)
 
-    # OPTIMISATION: Créer le LLM pour le streaming avec paramètres optimisés pour vitesse
-    if use_chat_ollama:
-        llm = ChatOllama(
-            model=settings.llm_model_name,
-            temperature=0.7,
-            num_predict=400,  # OPTIMISATION: Réduire à 400 tokens pour plus de rapidité
-        )
-    else:
-        llm = Ollama(
-            model=settings.llm_model_name,
-            temperature=0.7,
-            num_predict=400,  # OPTIMISATION: Réduire à 400 tokens pour plus de rapidité
-        )
+    # OPTIMISATION: Utiliser le gestionnaire LLM pour obtenir le LLM configuré (Grok, Ollama, etc.)
+    llm_manager = get_llm_manager()
+    llm = llm_manager.get_llm()  # Utilise le LLM par défaut (Grok si configuré)
 
     full_answer = ""
 
