@@ -128,28 +128,6 @@ jobs:
         # Désactiver le cache pour éviter les problèmes avec des stages incomplets
         no-cache: true
 
-  # Déploiement SSH désactivé - Le déploiement se fait automatiquement via Render
-  # Pour activer le déploiement SSH, configurez les secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY
-  # et décommentez ce job
-  #
-  # deploy:
-  #   name: Deploy to Production
-  #   runs-on: ubuntu-latest
-  #   needs: [test, build]
-  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-  #   
-  #   steps:
-  #   - uses: actions/checkout@v4
-  #   
-  #   - name: Deploy to server
-  #     uses: appleboy/ssh-action@v1
-  #     with:
-  #       host: ${{ secrets.DEPLOY_HOST }}
-  #       username: ${{ secrets.DEPLOY_USER }}
-  #       key: ${{ secrets.DEPLOY_SSH_KEY }}
-  #       script: |
-  #         cd /opt/rag-photographie
-  #         docker-compose pull
-  #         docker-compose up -d
-  #         docker-compose exec -T backend python -m alembic upgrade head
+  # Note: Le déploiement se fait automatiquement via Render (déploiement automatique depuis GitHub)
+  # Pour un déploiement SSH manuel, utilisez le workflow deploy.yml avec workflow_dispatch
 
