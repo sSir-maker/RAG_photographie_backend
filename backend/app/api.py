@@ -10,8 +10,6 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, EmailStr, validator
 from typing import List, Optional
 from fastapi import Query
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
 import json
 import re
 import html
@@ -56,85 +54,18 @@ app = FastAPI(title="RAG Photographie API", version="1.0.0")
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 
-# ⚠️ IMPORTANT: CORS DOIT être configuré AVANT les gestionnaires d'exceptions
-# CORS pour permettre les requêtes depuis le frontend (Vite ou Next.js)
-# Configuration depuis les variables d'environnement
-default_origins = [
-    "http://localhost:3000",  # Vite par défaut
-    "http://localhost:3001",  # Alternative
-    "http://127.0.0.1:3000",  # Alternative localhost
-    "https://rag-photographie-frontend.onrender.com",  # Frontend déployé sur Render
-]
-
-# Ajouter les origines depuis la variable d'environnement CORS_ORIGINS (séparées par des virgules)
-cors_origins_env = os.getenv("CORS_ORIGINS", "")
-if cors_origins_env:
-    additional_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
-    default_origins.extend(additional_origins)
-
-# Ajouter FRONTEND_URL si spécifié
-frontend_url = os.getenv("FRONTEND_URL")
-if frontend_url and frontend_url not in default_origins:
-    default_origins.append(frontend_url)
-
-# Logger les origines CORS configurées
-logger.info(f"CORS origins configurés: {default_origins}")
-
-# Fonction helper pour vérifier si une origine est autorisée
-def is_origin_allowed(origin: Optional[str]) -> bool:
-    """Vérifie si une origine est autorisée pour CORS."""
-    if not origin:
-        return False
-    # Vérifier si l'origine est dans la liste autorisée
-    if origin in default_origins:
-        return True
-    # Vérifier si c'est le frontend Render
-    if "rag-photographie-frontend.onrender.com" in origin:
-        return True
-    return False
-
-# Middleware CORS personnalisé pour garantir que les headers sont toujours présents
-class CustomCORSMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        origin = request.headers.get("origin")
-        is_allowed = is_origin_allowed(origin)
-        
-        # Gérer les requêtes OPTIONS (preflight)
-        if request.method == "OPTIONS":
-            response = Response(status_code=200)
-            if is_allowed:
-                response.headers["Access-Control-Allow-Origin"] = origin
-                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-                response.headers["Access-Control-Allow-Headers"] = request.headers.get("access-control-request-headers", "*")
-                response.headers["Access-Control-Allow-Credentials"] = "true"
-                response.headers["Access-Control-Max-Age"] = "3600"
-            return response
-        
-        # Traiter la requête normale
-        response = await call_next(request)
-        
-        # Ajouter les headers CORS à toutes les réponses
-        if is_allowed:
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-            response.headers["Access-Control-Allow-Headers"] = "*"
-            response.headers["Access-Control-Expose-Headers"] = "*"
-        
-        return response
-
-# Ajouter le middleware CORS personnalisé
-app.add_middleware(CustomCORSMiddleware)
-
-# Ajouter aussi le middleware CORS standard de FastAPI en backup
+# ⚠️ CORS DOIT être configuré AVANT les gestionnaires d'exceptions
+# CORS pour permettre les requêtes depuis le frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=default_origins,
+    allow_origins=[
+        "https://rag-photographie-frontend.onrender.com",  # Frontend déployé
+        "http://localhost:3000",  # Dev local
+        "http://localhost:5173",  # Vite dev
+    ],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"],
-    expose_headers=["*"],  # Exposer tous les headers pour le streaming
-    max_age=3600,  # Cache preflight requests for 1 hour (optimisation mobile)
+    allow_methods=["*"],  # GET, POST, etc.
+    allow_headers=["*"],  # Tous les headers
 )
 
 
@@ -142,22 +73,13 @@ app.add_middleware(
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     """Gestionnaire personnalisé pour les erreurs de rate limiting (retourne JSON)."""
-    # Obtenir l'origine de la requête pour les headers CORS
-    origin = request.headers.get("origin")
-    cors_headers = {}
-    if is_origin_allowed(origin):
-        cors_headers = {
-            "Access-Control-Allow-Origin": origin,
-            "Access-Control-Allow-Credentials": "true",
-        }
-    
     response = JSONResponse(
         status_code=429,
         content={
             "detail": "Trop de requêtes. Veuillez réessayer plus tard.",
             "retry_after": str(exc.retry_after) if exc.retry_after else None,
         },
-        headers={**cors_headers, **({"Retry-After": str(exc.retry_after)} if exc.retry_after else {})},
+        headers={"Retry-After": str(exc.retry_after)} if exc.retry_after else {},
     )
     return response
 
@@ -168,21 +90,12 @@ async def global_exception_handler(request: Request, exc: Exception):
     """Gestionnaire d'exceptions global pour retourner du JSON au lieu de HTML."""
     logger.error(f"Exception non gérée: {type(exc).__name__}: {str(exc)}", exc_info=True)
     
-    # Obtenir l'origine de la requête pour les headers CORS
-    origin = request.headers.get("origin")
-    cors_headers = {}
-    if is_origin_allowed(origin):
-        cors_headers = {
-            "Access-Control-Allow-Origin": origin,
-            "Access-Control-Allow-Credentials": "true",
-        }
-    
     # Si c'est déjà une HTTPException, la retourner en JSON
     if isinstance(exc, HTTPException):
         return JSONResponse(
             status_code=exc.status_code,
             content={"detail": exc.detail},
-            headers={**cors_headers, **(exc.headers or {})},
+            headers=exc.headers or {},
         )
     
     # Pour toutes les autres exceptions, retourner une erreur 500 en JSON
@@ -193,7 +106,6 @@ async def global_exception_handler(request: Request, exc: Exception):
             "error": str(exc),
             "type": type(exc).__name__,
         },
-        headers=cors_headers,
     )
 
 
@@ -201,22 +113,12 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Gestionnaire pour les erreurs de validation Pydantic (retourne JSON)."""
-    # Obtenir l'origine de la requête pour les headers CORS
-    origin = request.headers.get("origin")
-    cors_headers = {}
-    if is_origin_allowed(origin):
-        cors_headers = {
-            "Access-Control-Allow-Origin": origin,
-            "Access-Control-Allow-Credentials": "true",
-        }
-    
     return JSONResponse(
         status_code=422,
         content={
             "detail": "Erreur de validation",
             "errors": exc.errors(),
         },
-        headers=cors_headers,
     )
 
 
@@ -692,15 +594,6 @@ async def ask_question_stream(
         # Ajouter le message utilisateur
         add_message(db, conversation.id, "user", conversation_data.question)
 
-        # Récupérer l'origine pour les headers CORS
-        origin = request.headers.get("origin")
-        cors_headers = {}
-        if is_origin_allowed(origin):
-            cors_headers = {
-                "Access-Control-Allow-Origin": origin,
-                "Access-Control-Allow-Credentials": "true",
-            }
-
         return StreamingResponse(
             generate_streaming_response(
                 conversation_data.question, conversation.id, db, current_user, conversation_data.force_rebuild
@@ -710,7 +603,6 @@ async def ask_question_stream(
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
                 "X-Accel-Buffering": "no",
-                **cors_headers,
             },
         )
     except HTTPException:
@@ -721,15 +613,6 @@ async def ask_question_stream(
         error_details = traceback.format_exc()
         print(f"Erreur dans ask_question_stream: {error_details}")
 
-        # Récupérer l'origine pour les headers CORS
-        origin = request.headers.get("origin")
-        cors_headers = {}
-        if is_origin_allowed(origin):
-            cors_headers = {
-                "Access-Control-Allow-Origin": origin,
-                "Access-Control-Allow-Credentials": "true",
-            }
-
         # Retourner une réponse d'erreur en streaming
         async def error_stream():
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
@@ -738,7 +621,6 @@ async def ask_question_stream(
             error_stream(),
             media_type="text/event-stream",
             status_code=500,
-            headers=cors_headers,
         )
 
 
