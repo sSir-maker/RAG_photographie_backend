@@ -4,12 +4,14 @@ API FastAPI pour exposer le RAG photographie au frontend.
 
 from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, EmailStr, validator
 from typing import List, Optional
 from fastapi import Query
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import ASGIApp
 import json
 import re
 import html
@@ -55,17 +57,58 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 
 # ⚠️ CORS DOIT être configuré AVANT les gestionnaires d'exceptions
-# CORS pour permettre les requêtes depuis le frontend
+# Liste des origines autorisées
+ALLOWED_ORIGINS = [
+    "https://rag-photographie-frontend.onrender.com",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+]
+
+# Middleware CORS personnalisé pour garantir que les headers sont TOUJOURS présents
+class CustomCORSMiddleware(BaseHTTPMiddleware):
+    """Middleware CORS personnalisé qui garantit que les headers sont toujours présents."""
+    
+    async def dispatch(self, request, call_next):
+        origin = request.headers.get("origin")
+        
+        # Gérer les requêtes OPTIONS (preflight) explicitement
+        if request.method == "OPTIONS":
+            response = Response()
+            if origin and origin in ALLOWED_ORIGINS:
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+                response.headers["Access-Control-Allow-Headers"] = request.headers.get("access-control-request-headers", "*")
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Access-Control-Max-Age"] = "3600"
+            return response
+        
+        # Traiter la requête normale
+        response = await call_next(request)
+        
+        # Ajouter les headers CORS à TOUTES les réponses
+        if origin and origin in ALLOWED_ORIGINS:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+            response.headers["Access-Control-Expose-Headers"] = "*"
+        
+        return response
+
+# Ajouter le middleware CORS personnalisé EN PREMIER
+app.add_middleware(CustomCORSMiddleware)
+
+# Ajouter aussi le middleware CORS standard de FastAPI en backup
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://rag-photographie-frontend.onrender.com",  # Frontend déployé
-        "http://localhost:3000",  # Dev local
-        "http://localhost:5173",  # Vite dev
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],  # GET, POST, etc.
-    allow_headers=["*"],  # Tous les headers
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
 
 
@@ -234,6 +277,24 @@ class AnswerResponse(BaseModel):
 @app.get("/")
 async def root():
     return {"message": "RAG Photographie API", "status": "running"}
+
+
+@app.options("/{full_path:path}")
+async def options_handler(full_path: str, request: Request):
+    """Gestionnaire OPTIONS explicite pour toutes les routes (preflight CORS)."""
+    origin = request.headers.get("origin")
+    if origin and origin in ALLOWED_ORIGINS:
+        return Response(
+            status_code=200,
+            headers={
+                "Access-Control-Allow-Origin": origin,
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+                "Access-Control-Allow-Headers": request.headers.get("access-control-request-headers", "*"),
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Max-Age": "3600",
+            },
+        )
+    return Response(status_code=200)
 
 
 @app.get("/health")
