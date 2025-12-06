@@ -254,6 +254,36 @@ class AnswerResponse(BaseModel):
     num_sources: int
 
 
+# Endpoint OPTIONS explicite pour les requêtes préflight CORS
+@app.options("/{full_path:path}")
+async def options_handler(full_path: str, request: Request):
+    """Gestionnaire OPTIONS pour les requêtes préflight CORS."""
+    origin = request.headers.get("origin")
+    
+    # Vérifier si l'origine est autorisée
+    if origin and origin in ALLOWED_ORIGINS:
+        return Response(
+            status_code=200,
+            headers={
+                "Access-Control-Allow-Origin": origin,
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Max-Age": "3600",
+            },
+        )
+    
+    # Si l'origine n'est pas autorisée, retourner quand même OK pour éviter les erreurs
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": origin or "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        },
+    )
+
+
 @app.get("/")
 async def root():
     return {"message": "RAG Photographie API", "status": "running"}
