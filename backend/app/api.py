@@ -54,9 +54,15 @@ app = FastAPI(title="RAG Photographie API", version="1.0.0")
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 
-# Configuration CORS selon la documentation officielle FastAPI
+# Configuration CORS selon la documentation officielle FastAPI et Render
 # https://fastapi.tiangolo.com/tutorial/cors/
+# https://render.com/docs/multi-service
 # Le middleware CORS DOIT être ajouté APRÈS la création de l'app et AVANT les routes
+
+# Lire FRONTEND_URL depuis les variables d'environnement (recommandé par Render pour multi-services)
+FRONTEND_URL = os.getenv("FRONTEND_URL", "")
+
+# Liste des origines autorisées
 ALLOWED_ORIGINS = [
     "https://rag-photographie-frontend.onrender.com",
     "http://localhost:3000",
@@ -64,6 +70,18 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
 ]
+
+# Ajouter FRONTEND_URL si défini (pour multi-services sur Render)
+if FRONTEND_URL:
+    # Ajouter avec et sans trailing slash pour plus de robustesse
+    ALLOWED_ORIGINS.append(FRONTEND_URL.rstrip("/"))
+    if not FRONTEND_URL.endswith("/"):
+        ALLOWED_ORIGINS.append(f"{FRONTEND_URL}/")
+
+# Supprimer les doublons tout en gardant l'ordre
+ALLOWED_ORIGINS = list(dict.fromkeys(ALLOWED_ORIGINS))
+
+logger.info(f"🔧 CORS configured with allowed origins: {ALLOWED_ORIGINS}")
 
 app.add_middleware(
     CORSMiddleware,
