@@ -10,8 +10,6 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, EmailStr, validator
 from typing import List, Optional
 from fastapi import Query
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import ASGIApp
 import json
 import re
 import html
@@ -56,8 +54,9 @@ app = FastAPI(title="RAG Photographie API", version="1.0.0")
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 
-# ⚠️ CORS DOIT être configuré AVANT les gestionnaires d'exceptions
-# Liste des origines autorisées
+# Configuration CORS selon la documentation officielle FastAPI
+# https://fastapi.tiangolo.com/tutorial/cors/
+# Le middleware CORS DOIT être ajouté APRÈS la création de l'app et AVANT les routes
 ALLOWED_ORIGINS = [
     "https://rag-photographie-frontend.onrender.com",
     "http://localhost:3000",
@@ -66,16 +65,12 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
 ]
 
-# Configuration CORS - Utiliser uniquement le middleware standard de FastAPI
-# Le middleware CORS de FastAPI gère automatiquement les requêtes OPTIONS (preflight)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=ALLOWED_ORIGINS,  # Liste explicite (obligatoire si allow_credentials=True)
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-    max_age=3600,
+    allow_methods=["*"],  # Autoriser toutes les méthodes HTTP
+    allow_headers=["*"],  # Autoriser tous les headers
 )
 
 
