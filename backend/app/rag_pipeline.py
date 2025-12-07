@@ -360,9 +360,9 @@ Contexte: {context}"""
     # Formater le prompt avec le contexte et la question
     formatted_prompt = prompt.format_messages(context=context, input=question)
 
-    # OPTIMISATION: Utiliser le gestionnaire LLM pour obtenir le LLM configuré (Grok, Ollama, etc.)
+    # OPTIMISATION: Utiliser le gestionnaire LLM pour obtenir le LLM configuré (Ollama, OpenAI, etc.)
     llm_manager = get_llm_manager()
-    llm = llm_manager.get_llm()  # Utilise le LLM par défaut (Grok si configuré)
+    llm = llm_manager.get_llm()  # Utilise le LLM par défaut
 
     full_answer = ""
 

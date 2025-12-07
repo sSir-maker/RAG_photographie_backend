@@ -47,8 +47,7 @@ Le backend renvoie maintenant du JSON depuis https://rag-photographie-backend.on
 
 1. **LLM : unhealthy** ⚠️
    - Le health check essaie de se connecter à Ollama sur `localhost:11434`
-   - C'est normal si vous utilisez **Grok** au lieu d'Ollama
-   - Le health check devrait vérifier Grok si configuré
+   - Le health check vérifie Ollama par défaut
 
 2. **CORS : Toujours un problème** ❌
    - Le backend répond, MAIS les headers CORS ne sont pas présents
@@ -140,14 +139,14 @@ curl -v -X OPTIONS https://rag-photographie-backend.onrender.com/health \
 ### ❌ Ce qui ne fonctionne pas
 
 - **Headers CORS ne sont pas renvoyés** (problème principal)
-- Health check LLM essaie Ollama au lieu de Grok (problème secondaire)
+- Health check LLM vérifie Ollama (comportement par défaut)
 
 ### 🎯 Prochaines Étapes
 
 1. **Vérifier Render Dashboard** pour l'état du déploiement
 2. **Forcer un nouveau déploiement** si nécessaire
 3. **Tester les headers CORS** après le déploiement
-4. **Mettre à jour le health check** pour Grok (optionnel)
+4. **Mettre à jour le health check** si nécessaire (optionnel)
 
 Une fois le backend redéployé avec les changements CORS, le problème devrait être résolu !
 

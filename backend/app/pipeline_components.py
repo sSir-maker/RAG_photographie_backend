@@ -147,9 +147,9 @@ Contexte peut contenir des erreurs OCR. Cite les sources. Si info manquante, dis
 
 Contexte: {context}"""
         prompt = ChatPromptTemplate.from_messages([("system", system_prompt), ("human", "{input}")])
-        # Utiliser le gestionnaire LLM pour obtenir le LLM configuré (Grok, Ollama, etc.)
+        # Utiliser le gestionnaire LLM pour obtenir le LLM configuré (Ollama, OpenAI, etc.)
         llm_manager = get_llm_manager()
-        llm = llm_manager.get_llm()  # Utilise le LLM par défaut (Grok si configuré)
+        llm = llm_manager.get_llm()  # Utilise le LLM par défaut
         qa_chain = create_stuff_documents_chain(llm, prompt)
         self.rag_chain = create_retrieval_chain(retriever, qa_chain)
 
