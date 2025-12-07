@@ -58,10 +58,10 @@ RUN find . -type d -name "__pycache__" -exec rm -r {} + 2>/dev/null || true && \
     find . -type f -name "*.pyc" -delete && \
     find . -type f -name "*.pyo" -delete
 
-# Exposer le port de l'API (Railway utilise PORT dynamiquement)
+# Exposer le port de l'API (Render utilise PORT dynamiquement)
 EXPOSE 8001
 
-# Healthcheck (Railway utilise PORT dynamiquement, mais healthcheck utilise 8001 par défaut)
+# Healthcheck (Render utilise PORT dynamiquement, mais healthcheck utilise 8001 par défaut)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8001/health || exit 1
 
