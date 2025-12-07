@@ -51,7 +51,7 @@
     },
     build: {
       target: 'esnext',
-      outDir: 'build',
+      outDir: 'dist',  // Changé de 'build' à 'dist' pour correspondre au Dockerfile
     },
     server: {
       port: 3000,

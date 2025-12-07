@@ -83,6 +83,7 @@ ALLOWED_ORIGINS = list(dict.fromkeys(ALLOWED_ORIGINS))
 
 logger.info(f"🔧 CORS configured with allowed origins: {ALLOWED_ORIGINS}")
 
+# ⚠️ UN SEUL CORS MIDDLEWARE (le doublon a été supprimé)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,  # Liste explicite (obligatoire si allow_credentials=True)
@@ -91,6 +92,7 @@ app.add_middleware(
     allow_headers=["*"],  # Autoriser tous les headers
 )
 
+# ⚠️ LE DEUXIÈME app.add_middleware A ÉTÉ SUPPRIMÉ (il était en doublon)
 
 # Gestionnaire personnalisé pour le rate limiting (retourne JSON au lieu de HTML)
 @app.exception_handler(RateLimitExceeded)
@@ -254,34 +256,8 @@ class AnswerResponse(BaseModel):
     num_sources: int
 
 
-# Endpoint OPTIONS explicite pour les requêtes préflight CORS
-@app.options("/{full_path:path}")
-async def options_handler(full_path: str, request: Request):
-    """Gestionnaire OPTIONS pour les requêtes préflight CORS."""
-    origin = request.headers.get("origin")
-    
-    # Vérifier si l'origine est autorisée
-    if origin and origin in ALLOWED_ORIGINS:
-        return Response(
-            status_code=200,
-            headers={
-                "Access-Control-Allow-Origin": origin,
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, Authorization",
-                "Access-Control-Allow-Credentials": "true",
-                "Access-Control-Max-Age": "3600",
-            },
-        )
-    
-    # Si l'origine n'est pas autorisée, retourner quand même OK pour éviter les erreurs
-    return Response(
-        status_code=200,
-        headers={
-            "Access-Control-Allow-Origin": origin or "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        },
-    )
+# ⚠️ ENDPOINT OPTIONS SUPPRIMÉ (il interfère avec le CORS middleware automatique de FastAPI)
+# FastAPI gère automatiquement les requêtes OPTIONS préflight avec le middleware CORS
 
 
 @app.get("/")

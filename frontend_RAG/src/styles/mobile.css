@@ -1,0 +1,133 @@
+/* Styles responsive pour mobile */
+
+/* Évite le zoom iOS sur les inputs */
+@media (max-width: 768px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important; /* Évite le zoom automatique sur iOS */
+  }
+}
+
+/* Container responsive */
+@media (max-width: 768px) {
+  .login-container,
+  .auth-container {
+    padding: 20px !important;
+    width: 90% !important;
+    margin: 0 auto !important;
+    max-width: 100% !important;
+  }
+
+  /* Inputs plus grands pour mobile */
+  input,
+  button {
+    font-size: 16px !important;
+    padding: 12px !important;
+    min-height: 44px !important; /* Taille minimale recommandée pour mobile */
+  }
+
+  /* Boutons plus accessibles */
+  button {
+    min-height: 48px !important;
+    touch-action: manipulation; /* Évite le double-tap zoom */
+  }
+
+  /* Cards responsive */
+  .card,
+  [class*="rounded-2xl"] {
+    margin: 10px !important;
+    padding: 20px !important;
+  }
+
+  /* Text responsive */
+  h1 {
+    font-size: 1.75rem !important;
+  }
+
+  h2 {
+    font-size: 1.5rem !important;
+  }
+
+  h3 {
+    font-size: 1.25rem !important;
+  }
+
+  /* Espacement réduit sur mobile */
+  .space-y-4 > * + * {
+    margin-top: 1rem !important;
+  }
+
+  /* Messages d'erreur plus visibles */
+  [class*="error"],
+  [class*="bg-red"] {
+    padding: 12px !important;
+    font-size: 14px !important;
+  }
+}
+
+/* Très petits écrans */
+@media (max-width: 480px) {
+  .login-container,
+  .auth-container {
+    padding: 15px !important;
+    width: 95% !important;
+  }
+
+  h1 {
+    font-size: 1.5rem !important;
+  }
+
+  h2 {
+    font-size: 1.25rem !important;
+  }
+}
+
+/* Amélioration du touch sur mobile */
+@media (hover: none) and (pointer: coarse) {
+  button,
+  a,
+  [role="button"] {
+    min-height: 44px !important;
+    min-width: 44px !important;
+  }
+
+  /* Augmente la zone de touch */
+  input,
+  textarea,
+  select {
+    padding: 14px !important;
+  }
+}
+
+/* Fix pour le viewport sur iOS */
+@supports (-webkit-touch-callout: none) {
+  body {
+    /* iOS Safari fix */
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  #root {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Amélioration de la lisibilité sur mobile */
+@media (max-width: 768px) {
+  body {
+    -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+}
+

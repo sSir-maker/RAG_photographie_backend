@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { API_ENDPOINTS } from "../config";
 
 interface HealthStatus {
   status: string;
@@ -38,7 +39,7 @@ const HealthDashboard: React.FC = () => {
   useEffect(() => {
     const fetchHealth = async () => {
       try {
-        const response = await fetch("http://localhost:8001/health");
+        const response = await fetch(API_ENDPOINTS.health.basic);
         if (!response.ok) {
           throw new Error("Erreur lors de la récupération de la santé");
         }

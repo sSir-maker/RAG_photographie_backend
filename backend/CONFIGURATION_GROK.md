@@ -39,14 +39,30 @@ $env:GROK_API_KEY="xai-votre-cle-api-ici"
 $env:GROK_MODEL="grok-beta"
 ```
 
+## Base URL de l'API Grok
+
+Le base_url de Grok est : **`https://api.x.ai/v1`**
+
+L'endpoint complet pour les chat/completions est : `https://api.x.ai/v1/chat/completions`
+
+Ce base_url est déjà configuré par défaut dans le code. Vous n'avez pas besoin de le spécifier sauf si vous utilisez un proxy ou un service tiers.
+
 ## Modèles disponibles
 
 Grok propose plusieurs modèles :
 
 - `grok-beta` : Modèle par défaut (recommandé)
-- `grok-2` : Dernière version (si disponible)
+- `grok-4-latest` : Dernière version Grok 4 (recommandé pour les nouvelles fonctionnalités)
+- `grok-2` : Version précédente (si disponible)
 
-Consultez la [documentation X.AI](https://docs.x.ai) pour la liste complète des modèles.
+**Exemple de configuration avec `grok-4-latest` :**
+```bash
+GROK_API_KEY=xai-votre-cle-api-ici
+GROK_MODEL=grok-4-latest
+GROK_BASE_URL=https://api.x.ai/v1
+```
+
+Consultez la [documentation X.AI](https://docs.x.ai) pour la liste complète des modèles disponibles.
 
 ## Vérification de la configuration
 

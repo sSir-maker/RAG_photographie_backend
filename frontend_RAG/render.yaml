@@ -1,0 +1,17 @@
+# Configuration Render pour le frontend
+# Place ce fichier à la racine du repository frontend
+
+services:
+  - type: web
+    name: rag-photographie-frontend
+    env: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://rag-photographie-backend.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+

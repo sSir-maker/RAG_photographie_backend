@@ -1,0 +1,77 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+*.egg-info/
+
+# Environment
+.env
+.secrets
+.encryption_key
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Storage (sauf structure)
+storage/*.db
+storage/*.faiss
+storage/*.pkl
+storage/vector_store/*
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data files (PDFs sont volumineux - à charger séparément)
+data/*.pdf
+data/*.jpg
+data/*.png
+data/*.jpeg
+data/*.gif
+
+# Documentation (non nécessaire dans l'image)
+*.md
+!README.md
+
+# Scripts de développement
+scripts/*.ps1
+scripts/*.sh
+Makefile
+Makefile.windows
+
+# Fichiers Railway (non nécessaires dans l'image)
+railway.json
+railway.toml
+Dockerfile.railway
+
+# Fichiers de configuration locaux
+*.example
+*_TEMPLATE.txt
+*_GUIDE.md
+*_SETUP.md
+*_COMPLETE.md
+*_SUMMARY.md
+*_QUICKSTART.md
+*_CHECKLIST.md

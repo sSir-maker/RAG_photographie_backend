@@ -5,6 +5,8 @@ import { Sidebar } from './components/Sidebar';
 import { ThemeSelector } from './components/ThemeSelector';
 import { AuthPage } from './components/AuthPage';
 import { Menu, X } from 'lucide-react';
+import { API_ENDPOINTS } from './config';
+import { parseJSONResponse, getErrorMessageForStatus } from './utils/responseParser';
 
 export interface Message {
   id: string;
@@ -38,61 +40,210 @@ export default function App() {
   );
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<number | string | null>(null);
-  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
+  const [, setIsLoadingConversations] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  const currentConversation = conversations.find(c => c.id === currentConversationId);
+  const currentConversation = conversations.find((c: Conversation) => c.id === currentConversationId);
 
   const handleLogin = async (email: string, password: string): Promise<void> => {
     try {
-      const response = await fetch('http://localhost:8001/auth/login', {
+      // OPTIMISATION MOBILE: Timeout plus long pour les connexions lentes
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 secondes
+
+      // DEBUG: Log de l'URL utilisée
+      console.log('🔍 Login - API URL:', API_ENDPOINTS.auth.login);
+      console.log('🔍 Login - Request body:', { email, password: '***' });
+      
+      const response = await fetch(API_ENDPOINTS.auth.login, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email, password }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
+
+      // DEBUG: Log de la réponse
+      console.log('📡 Login - Response status:', response.status, response.statusText);
+      console.log('📡 Login - Response headers:', Object.fromEntries(response.headers.entries()));
+      
+      // Vérifier le Content-Type AVANT de parser
+      const contentType = response.headers.get('content-type');
+      console.log('📡 Login - Content-Type:', contentType);
+      
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Erreur lors de la connexion');
+        let errorMessage = 'Erreur lors de la connexion';
+        try {
+          const error = await parseJSONResponse(response);
+          console.error('❌ Login - Error response:', error);
+          
+          // Extraire le message d'erreur
+          let detail = error.detail;
+          
+          // Si c'est un tableau d'erreurs (validation Pydantic)
+          if (Array.isArray(detail)) {
+            const firstError = detail[0];
+            if (firstError?.msg) {
+              detail = firstError.msg;
+              // Traduire les erreurs de validation Pydantic
+              if (firstError.type === 'value_error.email' || 
+                  detail.includes('did not match the expected pattern') ||
+                  detail.includes('string does not match expected pattern')) {
+                detail = 'Format d\'email invalide. Veuillez vérifier que votre adresse email est correcte (exemple: votre@email.com)';
+              }
+            }
+          }
+          
+          // Traduire les messages d'erreur courants
+          if (typeof detail === 'string') {
+            if (detail.includes('did not match the expected pattern') || 
+                detail.includes('string does not match expected pattern')) {
+              detail = 'Format d\'email invalide. Veuillez vérifier que votre adresse email est correcte (exemple: votre@email.com)';
+            } else if (detail.includes('field required')) {
+              detail = 'Veuillez remplir tous les champs requis';
+            }
+          }
+          
+          errorMessage = detail || errorMessage;
+        } catch (parseError: any) {
+          // Si la réponse est du HTML ou ne peut pas être parsée comme JSON
+          console.error('❌ Login - Parse error:', parseError);
+          if (parseError.message?.includes('HTML') || parseError.message?.includes('page d\'erreur')) {
+            errorMessage = parseError.message;
+          } else {
+            errorMessage = getErrorMessageForStatus(response.status, response.statusText);
+          }
+        }
+        throw new Error(errorMessage);
       }
 
-      const data = await response.json();
+      // Vérifier AVANT de parser si la réponse est du HTML (même avec status 200)
+      const responseText = await response.clone().text();
+      console.log('📡 Login - Response preview (first 200 chars):', responseText.substring(0, 200));
+      console.log('📡 Login - Content-Type:', response.headers.get('content-type'));
+      
+      if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
+        console.error('❌ Login - HTML détecté avec status 200 !');
+        throw new Error(
+          'Le serveur a retourné une page HTML au lieu de JSON (Status: 200). ' +
+          'Le backend est peut-être en erreur ou mal configuré. ' +
+          `Vérifiez que l'URL backend est correcte : ${API_ENDPOINTS.auth.login}`
+        );
+      }
+      
+      const data = await parseJSONResponse(response);
       setAuthToken(data.access_token);
       localStorage.setItem('auth_token', data.access_token);
       setUserName(data.user.name);
       setIsAuthenticated(true);
     } catch (error: any) {
-      throw error;
+      // OPTIMISATION MOBILE: Meilleure gestion des erreurs réseau
+      if (error.name === 'AbortError') {
+        throw new Error('La requête a pris trop de temps. Vérifiez votre connexion internet.');
+      } else if (error.message?.includes('fetch')) {
+        throw new Error('Impossible de se connecter au serveur. Vérifiez votre connexion internet.');
+      } else if (error.message) {
+        throw error;
+      } else {
+        throw new Error('Une erreur inattendue est survenue. Veuillez réessayer.');
+      }
     }
   };
 
   const handleRegister = async (name: string, email: string, password: string): Promise<{ success: boolean; email: string }> => {
     try {
-      const response = await fetch('http://localhost:8001/auth/signup', {
+      // DEBUG: Log de l'URL utilisée
+      console.log('🔍 Register - API URL:', API_ENDPOINTS.auth.signup);
+      
+      // OPTIMISATION MOBILE: Timeout plus long pour les connexions lentes
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 secondes
+
+      const response = await fetch(API_ENDPOINTS.auth.signup, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ name, email, password }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
+
+      console.log('📡 Register - Response status:', response.status, response.statusText);
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Erreur lors de l\'inscription');
+        let errorMessage = 'Erreur lors de l\'inscription';
+        try {
+          const error = await parseJSONResponse(response);
+          console.error('❌ Register - Error response:', error);
+          
+          // Extraire le message d'erreur
+          let detail = error.detail;
+          
+          // Si c'est un tableau d'erreurs (validation Pydantic)
+          if (Array.isArray(detail)) {
+            const firstError = detail[0];
+            if (firstError?.msg) {
+              detail = firstError.msg;
+              // Traduire les erreurs de validation Pydantic
+              if (firstError.type === 'value_error.email' || 
+                  detail.includes('did not match the expected pattern') ||
+                  detail.includes('string does not match expected pattern')) {
+                detail = 'Format d\'email invalide. Veuillez vérifier que votre adresse email est correcte (exemple: votre@email.com)';
+              }
+            }
+          }
+          
+          // Traduire les messages d'erreur courants
+          if (typeof detail === 'string') {
+            if (detail.includes('did not match the expected pattern') || 
+                detail.includes('string does not match expected pattern')) {
+              detail = 'Format d\'email invalide. Veuillez vérifier que votre adresse email est correcte (exemple: votre@email.com)';
+            } else if (detail.includes('field required')) {
+              detail = 'Veuillez remplir tous les champs requis';
+            }
+          }
+          
+          errorMessage = detail || errorMessage;
+        } catch (parseError: any) {
+          // Si la réponse est du HTML ou ne peut pas être parsée comme JSON
+          console.error('❌ Register - Parse error:', parseError);
+          if (parseError.message?.includes('HTML') || parseError.message?.includes('page d\'erreur')) {
+            errorMessage = parseError.message;
+          } else {
+            errorMessage = getErrorMessageForStatus(response.status, response.statusText);
+          }
+        }
+        throw new Error(errorMessage);
       }
 
+      await parseJSONResponse(response);
+      console.log('✅ Register - Success');
+      
       // Après signup réussi, on ne connecte pas directement
       // On retourne juste un succès pour que AuthPage bascule vers login
       return { success: true, email };
     } catch (error: any) {
-      throw error;
+      console.error('❌ Register - Exception:', error);
+      // OPTIMISATION MOBILE: Meilleure gestion des erreurs réseau
+      if (error.name === 'AbortError') {
+        throw new Error('La requête a pris trop de temps. Vérifiez votre connexion internet.');
+      } else if (error.message?.includes('fetch') || error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+        throw new Error('Impossible de se connecter au serveur. Vérifiez votre connexion internet et que le backend est accessible.');
+      } else if (error.message) {
+        throw error;
+      } else {
+        throw new Error('Une erreur inattendue est survenue. Veuillez réessayer.');
+      }
     }
   };
 
   const toggleThemeMode = () => {
-    setTheme(prev => ({
+    setTheme((prev: Theme) => ({
       ...prev,
       mode: prev.mode === 'dark' ? 'light' : 'dark',
     }));
@@ -104,7 +255,7 @@ export default function App() {
     
     setIsLoadingConversations(true);
     try {
-      const response = await fetch('http://localhost:8001/conversations', {
+      const response = await fetch(API_ENDPOINTS.conversations.list, {
         headers: {
           'Authorization': `Bearer ${authToken}`,
         },
@@ -116,7 +267,7 @@ export default function App() {
           convs.map(async (conv: any) => {
             // Charger les messages pour chaque conversation
             const messagesResponse = await fetch(
-              `http://localhost:8001/conversations/${conv.id}/messages`,
+              API_ENDPOINTS.conversations.messages(conv.id),
               {
                 headers: {
                   'Authorization': `Bearer ${authToken}`,
@@ -152,7 +303,7 @@ export default function App() {
           setCurrentConversationId(conversationsWithMessages[0].id);
         } else {
           // Créer une conversation par défaut
-          const newConvResponse = await fetch('http://localhost:8001/conversations', {
+          const newConvResponse = await fetch(API_ENDPOINTS.conversations.create, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${authToken}`,
@@ -189,7 +340,7 @@ export default function App() {
   useEffect(() => {
     if (authToken) {
       // Vérifier que le token est valide
-      fetch('http://localhost:8001/auth/me', {
+      fetch(API_ENDPOINTS.auth.me, {
         headers: {
           'Authorization': `Bearer ${authToken}`,
         },
@@ -238,7 +389,7 @@ export default function App() {
     let conversationId = currentConversationId;
     if (!conversationId || typeof conversationId === 'string') {
       try {
-        const newConvResponse = await fetch('http://localhost:8001/conversations', {
+        const newConvResponse = await fetch(API_ENDPOINTS.conversations.create, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${authToken}`,
@@ -271,7 +422,7 @@ export default function App() {
     };
 
     // Ajouter le message utilisateur immédiatement
-    setConversations(prev => prev.map(conv => {
+    setConversations((prev: Conversation[]) => prev.map((conv: Conversation) => {
       if (conv.id === conversationId) {
         return {
           ...conv,
@@ -289,7 +440,7 @@ export default function App() {
       timestamp: new Date(),
     };
 
-    setConversations(prev => prev.map(conv => {
+    setConversations((prev: Conversation[]) => prev.map((conv: Conversation) => {
       if (conv.id === conversationId) {
         return {
           ...conv,
@@ -305,14 +456,14 @@ export default function App() {
       let streamingContent = '';
       
       // Remplacer le message de chargement par un message vide pour le streaming
-      setConversations(prev => prev.map(conv => {
+      setConversations((prev: Conversation[]) => prev.map((conv: Conversation) => {
         if (conv.id === conversationId) {
-          const messagesWithoutLoading = conv.messages.filter(msg => msg.id !== loadingMessage.id);
+          const messagesWithoutLoading = conv.messages.filter((msg: Message) => msg.id !== loadingMessage.id);
           return {
             ...conv,
             messages: [...messagesWithoutLoading, {
               id: streamingMessageId,
-              role: 'assistant',
+              role: 'assistant' as const,
               content: '',
               timestamp: new Date(),
             }],
@@ -322,7 +473,7 @@ export default function App() {
       }));
 
       // Appeler l'API backend en streaming
-      const response = await fetch('http://localhost:8001/ask/stream', {
+      const response = await fetch(API_ENDPOINTS.ask.stream, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -364,11 +515,11 @@ export default function App() {
                 streamingContent += data.content;
                 
                 // Mettre à jour le message en temps réel
-                setConversations(prev => prev.map(conv => {
+                setConversations((prev: Conversation[]) => prev.map((conv: Conversation) => {
                   if (conv.id === conversationId) {
                     return {
                       ...conv,
-                      messages: conv.messages.map(msg => 
+                      messages: conv.messages.map((msg: Message) => 
                         msg.id === streamingMessageId
                           ? { ...msg, content: streamingContent }
                           : msg
@@ -382,17 +533,18 @@ export default function App() {
                 // On pourrait les afficher dans un panneau latéral
               } else if (data.type === 'done') {
                 // Le streaming est terminé, recharger depuis la DB pour avoir les IDs corrects
-                const messagesResponse = await fetch(
-                  `http://localhost:8001/conversations/${conversationId}/messages`,
-                  {
-                    headers: {
-                      'Authorization': `Bearer ${authToken}`,
-                    },
-                  }
-                );
+                if (conversationId) {
+                  const messagesResponse = await fetch(
+                    API_ENDPOINTS.conversations.messages(conversationId),
+                    {
+                      headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                      },
+                    }
+                  );
                 
-                if (messagesResponse.ok) {
-                  const msgs = await messagesResponse.json();
+                  if (messagesResponse.ok) {
+                    const msgs = await messagesResponse.json();
                   const loadedMessages: Message[] = msgs.map((msg: any) => ({
                     id: msg.id.toString(),
                     role: msg.role,
@@ -401,7 +553,7 @@ export default function App() {
                     timestamp: new Date(msg.created_at),
                   }));
                   
-                  setConversations(prev => prev.map(conv => {
+                  setConversations((prev: Conversation[]) => prev.map((conv: Conversation) => {
                     if (conv.id === conversationId) {
                       return {
                         ...conv,
@@ -410,6 +562,7 @@ export default function App() {
                     }
                     return conv;
                   }));
+                  }
                 }
               } else if (data.type === 'error') {
                 throw new Error(data.message || 'Erreur lors du streaming');
@@ -429,9 +582,9 @@ export default function App() {
         timestamp: new Date(),
       };
 
-      setConversations(prev => prev.map(conv => {
+      setConversations((prev: Conversation[]) => prev.map((conv: Conversation) => {
         if (conv.id === conversationId) {
-          const messagesWithoutLoading = conv.messages.filter(msg => msg.id !== loadingMessage.id);
+          const messagesWithoutLoading = conv.messages.filter((msg: Message) => msg.id !== loadingMessage.id);
           return {
             ...conv,
             messages: [...messagesWithoutLoading, errorMessage],
@@ -446,7 +599,7 @@ export default function App() {
     if (!authToken) return;
     
     try {
-      const response = await fetch('http://localhost:8001/conversations', {
+      const response = await fetch(API_ENDPOINTS.conversations.create, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${authToken}`,
@@ -461,7 +614,7 @@ export default function App() {
           messages: [],
           createdAt: new Date(newConv.created_at),
         };
-        setConversations(prev => [conversation, ...prev]);
+        setConversations((prev: Conversation[]) => [conversation, ...prev]);
         setCurrentConversationId(conversation.id);
         setIsSidebarOpen(false);
       }
@@ -474,7 +627,7 @@ export default function App() {
     if (!authToken) return;
     
     try {
-      const response = await fetch(`http://localhost:8001/conversations/${id}`, {
+      const response = await fetch(API_ENDPOINTS.conversations.get(id), {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${authToken}`,
@@ -482,8 +635,8 @@ export default function App() {
       });
       
       if (response.ok) {
-        setConversations(prev => {
-          const remaining = prev.filter(c => c.id !== id);
+        setConversations((prev: Conversation[]) => {
+          const remaining = prev.filter((c: Conversation) => c.id !== id);
           if (currentConversationId === id) {
             if (remaining.length > 0) {
               setCurrentConversationId(remaining[0].id);
@@ -532,8 +685,8 @@ export default function App() {
       {/* Sidebar */}
       <Sidebar
         conversations={conversations}
-        currentConversationId={currentConversationId}
-        onSelectConversation={async (id) => {
+        currentConversationId={currentConversationId?.toString() || ''}
+        onSelectConversation={async (id: string | number) => {
           setCurrentConversationId(id);
           setIsSidebarOpen(false);
           
@@ -541,7 +694,7 @@ export default function App() {
           if (authToken && typeof id === 'number') {
             try {
               const response = await fetch(
-                `http://localhost:8001/conversations/${id}/messages`,
+                API_ENDPOINTS.conversations.messages(id),
                 {
                   headers: {
                     'Authorization': `Bearer ${authToken}`,
@@ -559,7 +712,7 @@ export default function App() {
                   timestamp: new Date(msg.created_at),
                 }));
                 
-                setConversations(prev => prev.map(conv => {
+                setConversations((prev: Conversation[]) => prev.map((conv: Conversation) => {
                   if (conv.id === id) {
                     return {
                       ...conv,
@@ -609,7 +762,7 @@ export default function App() {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4 py-8">
-            {currentConversation?.messages.map((message, index) => {
+            {currentConversation?.messages.map((message: Message, index: number) => {
               // Détecter si c'est le dernier message de l'assistant et qu'il est en cours de streaming
               const isLastMessage = index === (currentConversation.messages.length - 1);
               const isStreaming = isLastMessage && 

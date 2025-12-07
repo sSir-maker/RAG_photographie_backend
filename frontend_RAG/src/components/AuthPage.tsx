@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Theme } from '../App';
 import { Camera, Mail, Lock, User, Sun, Moon } from 'lucide-react';
+import { checkBackendHealth, getErrorMessage } from '../utils/apiHealthCheck';
+import { API_URL } from '../config';
 
 interface AuthPageProps {
   theme: Theme;
@@ -31,6 +33,36 @@ export function AuthPage({ theme, onThemeToggle, onLogin, onRegister }: AuthPage
 
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [backendHealth, setBackendHealth] = useState<{ checked: boolean; isHealthy: boolean; message: string }>({
+    checked: false,
+    isHealthy: true,
+    message: '',
+  });
+
+  // Vérifier la santé du backend au chargement
+  useEffect(() => {
+    const checkHealth = async () => {
+      console.log('🔍 Vérification de la connexion au backend...');
+      console.log('🔗 URL backend configurée:', API_URL);
+      
+      const result = await checkBackendHealth();
+      console.log('📊 Résultat du health check:', result);
+      
+      const errorMessage = !result.isHealthy ? getErrorMessage(result) : '';
+      
+      setBackendHealth({
+        checked: true,
+        isHealthy: result.isHealthy,
+        message: errorMessage || result.message,
+      });
+
+      if (!result.isHealthy) {
+        console.error('❌ Backend inaccessible:', result.message);
+      }
+    };
+
+    checkHealth();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,6 +77,15 @@ export function AuthPage({ theme, onThemeToggle, onLogin, onRegister }: AuthPage
           setIsLoading(false);
           return;
         }
+        
+        // Validation de l'email côté client
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          setError('Format d\'email invalide. Veuillez vérifier votre adresse email (exemple: votre@email.com)');
+          setIsLoading(false);
+          return;
+        }
+        
         await onLogin(email, password);
         // Si onLogin réussit, l'utilisateur sera automatiquement authentifié
         // et redirigé vers le bot (géré dans App.tsx)
@@ -54,6 +95,15 @@ export function AuthPage({ theme, onThemeToggle, onLogin, onRegister }: AuthPage
           setIsLoading(false);
           return;
         }
+        
+        // Validation de l'email côté client
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          setError('Format d\'email invalide. Veuillez vérifier votre adresse email (exemple: votre@email.com)');
+          setIsLoading(false);
+          return;
+        }
+        
         if (password.length < 6) {
           setError('Le mot de passe doit contenir au moins 6 caractères');
           setIsLoading(false);
@@ -71,14 +121,29 @@ export function AuthPage({ theme, onThemeToggle, onLogin, onRegister }: AuthPage
         }
       }
     } catch (err: any) {
-      setError(err.message || 'Une erreur est survenue');
+      console.error('❌ AuthPage - Error:', err);
+      // Afficher un message d'erreur plus détaillé
+      let errorMessage = err.message || 'Une erreur est survenue';
+      
+      // Traduire les messages d'erreur Pydantic en français
+      if (errorMessage.includes('did not match the expected pattern') || 
+          errorMessage.includes('string does not match expected pattern')) {
+        errorMessage = 'Format d\'email invalide. Veuillez vérifier que votre adresse email est correcte (exemple: votre@email.com)';
+      } else if (errorMessage.includes('field required')) {
+        errorMessage = 'Veuillez remplir tous les champs requis';
+      } else if (errorMessage.includes('validation error')) {
+        errorMessage = 'Les données saisies ne sont pas valides. Veuillez vérifier vos informations.';
+      }
+      
+      console.error('❌ AuthPage - Error message:', errorMessage);
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className={`min-h-screen flex items-center justify-center px-4 ${
+    <div className={`min-h-screen flex items-center justify-center px-4 auth-container ${
       isDark ? 'bg-[#0a0a0a]' : 'bg-gray-50'
     }`}>
       {/* Theme Toggle */}
@@ -142,9 +207,11 @@ export function AuthPage({ theme, onThemeToggle, onLogin, onRegister }: AuthPage
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Jean Dupont"
+                    autoComplete="name"
                     className={`flex-1 bg-transparent outline-none ${
                       isDark ? 'text-white placeholder-white/40' : 'text-gray-900 placeholder-gray-500'
                     }`}
+                    style={{ fontSize: '16px' }}
                   />
                 </div>
               </div>
@@ -165,9 +232,11 @@ export function AuthPage({ theme, onThemeToggle, onLogin, onRegister }: AuthPage
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="vous@exemple.com"
+                  autoComplete="email"
                   className={`flex-1 bg-transparent outline-none ${
                     isDark ? 'text-white placeholder-white/40' : 'text-gray-900 placeholder-gray-500'
                   }`}
+                  style={{ fontSize: '16px' }}
                 />
               </div>
             </div>
@@ -187,16 +256,47 @@ export function AuthPage({ theme, onThemeToggle, onLogin, onRegister }: AuthPage
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
+                  autoComplete={isLogin ? 'current-password' : 'new-password'}
                   className={`flex-1 bg-transparent outline-none ${
                     isDark ? 'text-white placeholder-white/40' : 'text-gray-900 placeholder-gray-500'
                   }`}
+                  style={{ fontSize: '16px' }}
                 />
               </div>
             </div>
 
-            {error && (
-              <div className="px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20">
-                <p className="text-sm text-red-500">{error}</p>
+            {!backendHealth.checked && (
+              <div className="px-4 py-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                <p className="text-sm text-blue-500">
+                  🔍 Vérification de la connexion au backend...
+                </p>
+              </div>
+            )}
+
+            {backendHealth.checked && !backendHealth.isHealthy && (
+              <div 
+                className="px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20"
+                data-load-failed={true}
+              >
+                <p className="text-sm text-red-500 whitespace-pre-line">
+                  ❌ {backendHealth.message}
+                </p>
+                <p className="text-xs text-red-400 mt-2">
+                  🔗 Backend: {API_URL}
+                </p>
+              </div>
+            )}
+
+            {error && backendHealth.isHealthy && (
+              <div 
+                className="px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20"
+                data-load-failed={error.includes('Load failed') || error.includes('Failed to fetch') || error.includes('NetworkError')}
+              >
+                <p className="text-sm text-red-500">
+                  {error.includes('Load failed') || error.includes('Failed to fetch') || error.includes('NetworkError')
+                    ? '❌ Erreur de connexion. Vérifiez votre connexion internet et réessayez.'
+                    : error}
+                </p>
               </div>
             )}
 
