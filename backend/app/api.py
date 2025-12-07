@@ -83,7 +83,6 @@ ALLOWED_ORIGINS = list(dict.fromkeys(ALLOWED_ORIGINS))
 
 logger.info(f"🔧 CORS configured with allowed origins: {ALLOWED_ORIGINS}")
 
-# ⚠️ UN SEUL CORS MIDDLEWARE (le doublon a été supprimé)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,  # Liste explicite (obligatoire si allow_credentials=True)
@@ -92,7 +91,6 @@ app.add_middleware(
     allow_headers=["*"],  # Autoriser tous les headers
 )
 
-# ⚠️ LE DEUXIÈME app.add_middleware A ÉTÉ SUPPRIMÉ (il était en doublon)
 
 # Gestionnaire personnalisé pour le rate limiting (retourne JSON au lieu de HTML)
 @app.exception_handler(RateLimitExceeded)
@@ -254,10 +252,6 @@ class AnswerResponse(BaseModel):
     answer: str
     sources: List[SourceInfo]
     num_sources: int
-
-
-# ⚠️ ENDPOINT OPTIONS SUPPRIMÉ (il interfère avec le CORS middleware automatique de FastAPI)
-# FastAPI gère automatiquement les requêtes OPTIONS préflight avec le middleware CORS
 
 
 @app.get("/")
