@@ -44,7 +44,7 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
-        cache-dependency-path: backend/requirements.txt
+        # Le cache sera mis à jour après avoir trouvé requirements.txt
     
     - name: Install system dependencies
       run: |
@@ -53,24 +53,24 @@ jobs:
     
     - name: Install Python dependencies
       run: |
-        python -m pip install --upgrade pip
+        python -m pip install --upgrade pip setuptools wheel
         echo "📁 Recherche de requirements.txt..."
         # Trouver le chemin exact de requirements.txt
-        REQ_FILE=$(find . -name "requirements.txt" -type f ! -path "*/venv/*" ! -path "*/.venv/*" ! -path "*/.git/*" 2>/dev/null | head -1)
+        REQ_FILE=$(find . -name "requirements.txt" -type f ! -path "*/venv/*" ! -path "*/.venv/*" ! -path "*/.git/*" ! -path "*/__pycache__/*" 2>/dev/null | head -1)
         if [ -z "$REQ_FILE" ]; then
           echo "❌ ERREUR: Fichier requirements.txt non trouvé"
           echo "📁 Recherche de tous les fichiers .txt:"
-          find . -name "*.txt" -type f 2>/dev/null | head -20
+          find . -name "*.txt" -type f ! -path "*/.git/*" 2>/dev/null | head -20
           exit 1
         fi
         echo "✅ Fichier requirements.txt trouvé: $REQ_FILE"
         echo "✅ Installation depuis $REQ_FILE"
-        pip install -r "$REQ_FILE"
+        pip install --no-cache-dir -r "$REQ_FILE"
         # Chercher requirements-test.txt
-        REQ_TEST_FILE=$(find . -name "requirements-test.txt" -type f ! -path "*/venv/*" ! -path "*/.venv/*" ! -path "*/.git/*" 2>/dev/null | head -1)
+        REQ_TEST_FILE=$(find . -name "requirements-test.txt" -type f ! -path "*/venv/*" ! -path "*/.venv/*" ! -path "*/.git/*" ! -path "*/__pycache__/*" 2>/dev/null | head -1)
         if [ -n "$REQ_TEST_FILE" ]; then
           echo "✅ Installation depuis $REQ_TEST_FILE"
-          pip install -r "$REQ_TEST_FILE" || true
+          pip install --no-cache-dir -r "$REQ_TEST_FILE" || true
         else
           echo "⚠️ Fichier requirements-test.txt non trouvé (optionnel)"
         fi
@@ -78,16 +78,24 @@ jobs:
     - name: Run tests (non-blocking)
       continue-on-error: true
       run: |
-        # Chercher tests/ dans backend/ ou à la racine
-        if [ -d "backend/tests" ]; then
-          echo "✅ Exécution des tests depuis backend/tests/"
-          cd backend
-          pytest tests/ -v --cov=app --cov-report=xml --cov-report=html || true
-        elif [ -d "tests" ]; then
-          echo "✅ Exécution des tests depuis tests/"
+        # Chercher le dossier tests récursivement
+        TESTS_DIR=$(find . -type d -name "tests" ! -path "*/venv/*" ! -path "*/.venv/*" ! -path "*/.git/*" ! -path "*/__pycache__/*" 2>/dev/null | head -1)
+        if [ -z "$TESTS_DIR" ]; then
+          echo "⚠️ Dossier tests/ non trouvé"
+          exit 0
+        fi
+        echo "✅ Dossier tests trouvé: $TESTS_DIR"
+        # Trouver le dossier app pour la couverture
+        APP_DIR=$(find . -type d -name "app" ! -path "*/venv/*" ! -path "*/.venv/*" ! -path "*/.git/*" ! -path "*/__pycache__/*" 2>/dev/null | head -1)
+        if [ -n "$APP_DIR" ]; then
+          echo "✅ Dossier app trouvé: $APP_DIR"
+          # Exécuter depuis le répertoire parent pour couvrir app/
+          cd "$(dirname "$TESTS_DIR")" || cd .
           pytest tests/ -v --cov=app --cov-report=xml --cov-report=html || true
         else
-          echo "⚠️ Dossier tests/ non trouvé"
+          echo "⚠️ Dossier app/ non trouvé, exécution sans couverture"
+          cd "$(dirname "$TESTS_DIR")" || cd .
+          pytest tests/ -v || true
         fi
       env:
         SKIP_RATE_LIMIT: "true"
@@ -96,7 +104,8 @@ jobs:
       if: always()
       uses: codecov/codecov-action@v3
       with:
-        file: ./backend/coverage.xml
+        # Chercher coverage.xml récursivement
+        file: $(find . -name "coverage.xml" -type f ! -path "*/.git/*" 2>/dev/null | head -1 || echo "")
         flags: backend
         name: codecov-backend
         fail_ci_if_error: false
@@ -124,8 +133,9 @@ jobs:
       if: github.event_name != 'pull_request'
       uses: docker/build-push-action@v5
       with:
-        context: ./backend
-        file: ./backend/Dockerfile
+        # Chercher le Dockerfile récursivement
+        context: $(find . -name "Dockerfile" -type f ! -path "*/.git/*" 2>/dev/null | head -1 | xargs dirname || echo ".")
+        file: $(find . -name "Dockerfile" -type f ! -path "*/.git/*" 2>/dev/null | head -1 || echo "./Dockerfile")
         push: true
         tags: |
           ${{ secrets.DOCKER_USERNAME }}/rag-photographie-backend:latest

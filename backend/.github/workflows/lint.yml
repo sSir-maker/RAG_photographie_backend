@@ -64,16 +64,22 @@ jobs:
         echo "✅ Formatage terminé"
     
     - name: Format with isort (ALWAYS - NO CHECK)
+      continue-on-error: true
       run: |
         echo "🔧 Formatage automatique des imports avec isort..."
-        PYTHON_FILES=$(find . -type f -name "*.py" ! -path "*/venv/*" ! -path "*/__pycache__/*" ! -path "*/.git/*" 2>/dev/null | head -10)
+        PYTHON_FILES=$(find . -type f -name "*.py" ! -path "*/venv/*" ! -path "*/__pycache__/*" ! -path "*/.git/*" ! -path "*/.venv/*" 2>/dev/null | head -20)
         if [ -z "$PYTHON_FILES" ]; then
           echo "⚠️ Aucun fichier Python trouvé - skip du formatage isort"
           exit 0
         fi
         echo "✅ Fichiers Python trouvés, formatage avec isort..."
-        # Utiliser '.' pour formater tout le dépôt
-        isort . --skip venv --skip .git --skip __pycache__ --skip .venv 2>&1 || echo "⚠️ Erreur isort (non-bloquant)"
+        # Formater fichier par fichier pour plus de robustesse
+        echo "$PYTHON_FILES" | while read -r file; do
+          if [ -f "$file" ]; then
+            isort "$file" 2>&1 || true
+          fi
+        done
+        echo "✅ Formatage isort terminé"
     
     - name: Commit and push formatted code
       run: |
