@@ -46,16 +46,24 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
+        # Chercher requirements.txt à la racine ou dans backend/
         if [ -f "requirements.txt" ]; then
-          echo "✅ Installation depuis requirements.txt"
+          echo "✅ Installation depuis requirements.txt (racine)"
           pip install -r requirements.txt
+        elif [ -f "backend/requirements.txt" ]; then
+          echo "✅ Installation depuis backend/requirements.txt"
+          pip install -r backend/requirements.txt
         else
-          echo "❌ Fichier requirements.txt non trouvé"
+          echo "❌ Fichier requirements.txt non trouvé ni à la racine ni dans backend/"
           exit 1
         fi
+        # Chercher requirements-test.txt à la racine ou dans backend/
         if [ -f "requirements-test.txt" ]; then
-          echo "✅ Installation depuis requirements-test.txt"
+          echo "✅ Installation depuis requirements-test.txt (racine)"
           pip install -r requirements-test.txt || true
+        elif [ -f "backend/requirements-test.txt" ]; then
+          echo "✅ Installation depuis backend/requirements-test.txt"
+          pip install -r backend/requirements-test.txt || true
         else
           echo "⚠️ Fichier requirements-test.txt non trouvé (optionnel)"
         fi
