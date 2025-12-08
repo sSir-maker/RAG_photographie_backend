@@ -100,12 +100,24 @@ jobs:
       env:
         SKIP_RATE_LIMIT: "true"
     
-    - name: Upload coverage to Codecov
+    - name: Find coverage file
+      id: find_coverage
       if: always()
+      run: |
+        COV_FILE=$(find . -name "coverage.xml" -type f ! -path "*/.git/*" 2>/dev/null | head -1 || echo "")
+        if [ -n "$COV_FILE" ]; then
+          echo "file=$COV_FILE" >> $GITHUB_OUTPUT
+          echo "✅ Fichier coverage trouvé: $COV_FILE"
+        else
+          echo "file=" >> $GITHUB_OUTPUT
+          echo "⚠️ Fichier coverage.xml non trouvé"
+        fi
+    
+    - name: Upload coverage to Codecov
+      if: always() && steps.find_coverage.outputs.file != ''
       uses: codecov/codecov-action@v3
       with:
-        # Chercher coverage.xml récursivement
-        file: $(find . -name "coverage.xml" -type f ! -path "*/.git/*" 2>/dev/null | head -1 || echo "")
+        file: ${{ steps.find_coverage.outputs.file }}
         flags: backend
         name: codecov-backend
         fail_ci_if_error: false
@@ -129,13 +141,27 @@ jobs:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
     
-    - name: Build and push backend image
+    - name: Find Dockerfile
+      id: find_dockerfile
       if: github.event_name != 'pull_request'
+      run: |
+        DOCKERFILE=$(find . -name "Dockerfile" -type f ! -path "*/.git/*" 2>/dev/null | head -1 || echo "")
+        if [ -z "$DOCKERFILE" ]; then
+          echo "❌ Dockerfile non trouvé"
+          exit 1
+        fi
+        DOCKER_CONTEXT=$(dirname "$DOCKERFILE")
+        echo "file=$DOCKERFILE" >> $GITHUB_OUTPUT
+        echo "context=$DOCKER_CONTEXT" >> $GITHUB_OUTPUT
+        echo "✅ Dockerfile trouvé: $DOCKERFILE"
+        echo "✅ Context: $DOCKER_CONTEXT"
+    
+    - name: Build and push backend image
+      if: github.event_name != 'pull_request' && steps.find_dockerfile.outputs.file != ''
       uses: docker/build-push-action@v5
       with:
-        # Chercher le Dockerfile récursivement
-        context: $(find . -name "Dockerfile" -type f ! -path "*/.git/*" 2>/dev/null | head -1 | xargs dirname || echo ".")
-        file: $(find . -name "Dockerfile" -type f ! -path "*/.git/*" 2>/dev/null | head -1 || echo "./Dockerfile")
+        context: ${{ steps.find_dockerfile.outputs.context }}
+        file: ${{ steps.find_dockerfile.outputs.file }}
         push: true
         tags: |
           ${{ secrets.DOCKER_USERNAME }}/rag-photographie-backend:latest
