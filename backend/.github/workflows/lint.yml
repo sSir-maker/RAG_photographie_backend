@@ -35,21 +35,41 @@ jobs:
         echo "📁 Recherche des fichiers Python..."
         find . -type f -name "*.py" | head -10 || true
         echo "📁 Vérification existence app/ et tests/..."
-        if [ -d "app" ]; then
-          echo "✅ Dossier app/ existe"
+        # Chercher dans backend/app/ et backend/tests/ (structure monorepo)
+        if [ -d "backend/app" ]; then
+          echo "✅ Dossier backend/app/ existe"
+          ls -la backend/app/ | head -5 || true
+          APP_DIR="backend/app"
+          TESTS_DIR="backend/tests"
+        elif [ -d "app" ]; then
+          echo "✅ Dossier app/ existe (racine)"
           ls -la app/ | head -5 || true
+          APP_DIR="app"
+          TESTS_DIR="tests"
         else
-          echo "❌ Dossier app/ n'existe pas"
+          echo "❌ Dossier app/ non trouvé ni dans backend/ ni à la racine"
+          APP_DIR=""
         fi
-        if [ -d "tests" ]; then
-          echo "✅ Dossier tests/ existe"
+        if [ -d "backend/tests" ]; then
+          echo "✅ Dossier backend/tests/ existe"
+          ls -la backend/tests/ | head -5 || true
+        elif [ -d "tests" ]; then
+          echo "✅ Dossier tests/ existe (racine)"
           ls -la tests/ | head -5 || true
         else
-          echo "❌ Dossier tests/ n'existe pas"
+          echo "❌ Dossier tests/ non trouvé ni dans backend/ ni à la racine"
         fi
-        if [ -d "app" ] && [ -d "tests" ]; then
-          echo "✅ Exécution de Black..."
-          black app tests 2>&1 || echo "⚠️ Erreur Black (non-bloquant)"
+        if [ -n "$APP_DIR" ] && ([ -d "$TESTS_DIR" ] || [ -d "backend/tests" ] || [ -d "tests" ]); then
+          echo "✅ Exécution de Black sur $APP_DIR..."
+          if [ -d "$TESTS_DIR" ]; then
+            black "$APP_DIR" "$TESTS_DIR" 2>&1 || echo "⚠️ Erreur Black (non-bloquant)"
+          elif [ -d "backend/tests" ]; then
+            black "$APP_DIR" "backend/tests" 2>&1 || echo "⚠️ Erreur Black (non-bloquant)"
+          elif [ -d "tests" ]; then
+            black "$APP_DIR" "tests" 2>&1 || echo "⚠️ Erreur Black (non-bloquant)"
+          else
+            black "$APP_DIR" 2>&1 || echo "⚠️ Erreur Black (non-bloquant)"
+          fi
         else
           echo "⚠️ Skip du formatage Black - dossiers manquants"
         fi
@@ -57,9 +77,27 @@ jobs:
     - name: Format with isort (ALWAYS - NO CHECK)
       run: |
         echo "🔧 Formatage automatique des imports avec isort..."
-        if [ -d "app" ] && [ -d "tests" ]; then
-          echo "✅ Exécution de isort..."
-          isort app tests 2>&1 || echo "⚠️ Erreur isort (non-bloquant)"
+        # Chercher dans backend/app/ et backend/tests/ (structure monorepo)
+        if [ -d "backend/app" ]; then
+          APP_DIR="backend/app"
+          TESTS_DIR="backend/tests"
+        elif [ -d "app" ]; then
+          APP_DIR="app"
+          TESTS_DIR="tests"
+        else
+          APP_DIR=""
+        fi
+        if [ -n "$APP_DIR" ] && ([ -d "$TESTS_DIR" ] || [ -d "backend/tests" ] || [ -d "tests" ]); then
+          echo "✅ Exécution de isort sur $APP_DIR..."
+          if [ -d "$TESTS_DIR" ]; then
+            isort "$APP_DIR" "$TESTS_DIR" 2>&1 || echo "⚠️ Erreur isort (non-bloquant)"
+          elif [ -d "backend/tests" ]; then
+            isort "$APP_DIR" "backend/tests" 2>&1 || echo "⚠️ Erreur isort (non-bloquant)"
+          elif [ -d "tests" ]; then
+            isort "$APP_DIR" "tests" 2>&1 || echo "⚠️ Erreur isort (non-bloquant)"
+          else
+            isort "$APP_DIR" 2>&1 || echo "⚠️ Erreur isort (non-bloquant)"
+          fi
         else
           echo "⚠️ Skip du formatage isort - dossiers manquants"
         fi
@@ -68,10 +106,38 @@ jobs:
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        if [ -d "app" ] && [ -d "tests" ]; then
-          if [ -n "$(git status --porcelain app/ tests/ 2>/dev/null)" ]; then
+        # Déterminer les chemins corrects
+        if [ -d "backend/app" ]; then
+          APP_DIR="backend/app"
+          TESTS_DIR="backend/tests"
+        elif [ -d "app" ]; then
+          APP_DIR="app"
+          TESTS_DIR="tests"
+        else
+          APP_DIR=""
+        fi
+        if [ -n "$APP_DIR" ]; then
+          # Vérifier les changements
+          if [ -d "$TESTS_DIR" ]; then
+            CHANGED=$(git status --porcelain "$APP_DIR" "$TESTS_DIR" 2>/dev/null)
+          elif [ -d "backend/tests" ]; then
+            CHANGED=$(git status --porcelain "$APP_DIR" "backend/tests" 2>/dev/null)
+          elif [ -d "tests" ]; then
+            CHANGED=$(git status --porcelain "$APP_DIR" "tests" 2>/dev/null)
+          else
+            CHANGED=$(git status --porcelain "$APP_DIR" 2>/dev/null)
+          fi
+          if [ -n "$CHANGED" ]; then
             echo "📝 Changements détectés, commit automatique..."
-            git add app/ tests/ || true
+            if [ -d "$TESTS_DIR" ]; then
+              git add "$APP_DIR" "$TESTS_DIR" || true
+            elif [ -d "backend/tests" ]; then
+              git add "$APP_DIR" "backend/tests" || true
+            elif [ -d "tests" ]; then
+              git add "$APP_DIR" "tests" || true
+            else
+              git add "$APP_DIR" || true
+            fi
             git commit -m "style: Auto-format code with Black and isort [skip ci]" || exit 0
             git push || exit 0
             echo "✅ Fichiers formatés et poussés automatiquement"
@@ -100,7 +166,9 @@ jobs:
     - name: Run Flake8 (non-blocking)
       continue-on-error: true
       run: |
-        if [ -d "app" ] && [ -d "tests" ]; then
+        if [ -d "backend/app" ] && [ -d "backend/tests" ]; then
+          flake8 backend/app/ backend/tests/ --max-line-length=120 --extend-ignore=E203,W503,E501 || true
+        elif [ -d "app" ] && [ -d "tests" ]; then
           flake8 app/ tests/ --max-line-length=120 --extend-ignore=E203,W503,E501 || true
         else
           echo "⚠️ Les dossiers app/ ou tests/ n'existent pas, skip Flake8"
@@ -109,7 +177,9 @@ jobs:
     - name: Run Pylint (non-blocking)
       continue-on-error: true
       run: |
-        if [ -d "app" ]; then
+        if [ -d "backend/app" ]; then
+          pylint backend/app/ --disable=C0111,C0103,R0913,R0903,W0613 || true
+        elif [ -d "app" ]; then
           pylint app/ --disable=C0111,C0103,R0913,R0903,W0613 || true
         else
           echo "⚠️ Le dossier app/ n'existe pas, skip Pylint"
@@ -118,7 +188,9 @@ jobs:
     - name: Run MyPy (non-blocking)
       continue-on-error: true
       run: |
-        if [ -d "app" ]; then
+        if [ -d "backend/app" ]; then
+          mypy backend/app/ --ignore-missing-imports --no-strict-optional || true
+        elif [ -d "app" ]; then
           mypy app/ --ignore-missing-imports --no-strict-optional || true
         else
           echo "⚠️ Le dossier app/ n'existe pas, skip MyPy"
