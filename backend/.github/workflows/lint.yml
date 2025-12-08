@@ -41,18 +41,27 @@ jobs:
         find . -type d -maxdepth 2 -name "app" -o -name "tests" -o -name "backend" | head -10 || true
     
     - name: Format with Black (ALWAYS - NO CHECK)
+      continue-on-error: true
       run: |
         echo "🔧 Formatage automatique des fichiers avec Black..."
         echo "📁 Recherche de fichiers Python..."
-        PYTHON_FILES=$(find . -type f -name "*.py" ! -path "*/venv/*" ! -path "*/__pycache__/*" ! -path "*/.git/*" 2>/dev/null | head -10)
+        PYTHON_FILES=$(find . -type f -name "*.py" ! -path "*/venv/*" ! -path "*/__pycache__/*" ! -path "*/.git/*" ! -path "*/.venv/*" 2>/dev/null | head -20)
         if [ -z "$PYTHON_FILES" ]; then
           echo "⚠️ Aucun fichier Python trouvé - skip du formatage"
           exit 0
         fi
-        echo "✅ Fichiers Python trouvés, formatage avec Black..."
+        echo "✅ Fichiers Python trouvés:"
         echo "$PYTHON_FILES"
-        # Utiliser '.' pour formater tout le dépôt (Black ignore automatiquement venv/, .git/, etc.)
-        black . --exclude='/(venv|\.git|__pycache__|\.venv|env|build|dist)/' 2>&1 || echo "⚠️ Erreur Black (non-bloquant)"
+        echo ""
+        echo "🔧 Formatage avec Black..."
+        # Formater tous les fichiers Python trouvés directement (plus sûr que black .)
+        echo "$PYTHON_FILES" | while read -r file; do
+          if [ -f "$file" ]; then
+            echo "Formatage: $file"
+            black "$file" 2>&1 || true
+          fi
+        done
+        echo "✅ Formatage terminé"
     
     - name: Format with isort (ALWAYS - NO CHECK)
       run: |
