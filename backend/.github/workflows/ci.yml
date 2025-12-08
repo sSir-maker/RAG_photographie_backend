@@ -19,6 +19,18 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    - name: Debug - Check repository structure
+      run: |
+        echo "📁 Répertoire de travail:"
+        pwd
+        echo "📁 Structure du dépôt:"
+        ls -la
+        echo "📁 Fichiers Python requis:"
+        ls -la requirements*.txt || echo "⚠️ Aucun fichier requirements*.txt trouvé"
+        echo "📁 Dossiers app et tests:"
+        ls -la app/ 2>/dev/null | head -3 || echo "⚠️ Dossier app/ non trouvé"
+        ls -la tests/ 2>/dev/null | head -3 || echo "⚠️ Dossier tests/ non trouvé"
+    
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
@@ -34,8 +46,19 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install -r requirements-test.txt || true
+        if [ -f "requirements.txt" ]; then
+          echo "✅ Installation depuis requirements.txt"
+          pip install -r requirements.txt
+        else
+          echo "❌ Fichier requirements.txt non trouvé"
+          exit 1
+        fi
+        if [ -f "requirements-test.txt" ]; then
+          echo "✅ Installation depuis requirements-test.txt"
+          pip install -r requirements-test.txt || true
+        else
+          echo "⚠️ Fichier requirements-test.txt non trouvé (optionnel)"
+        fi
     
     - name: Run tests (non-blocking)
       continue-on-error: true
