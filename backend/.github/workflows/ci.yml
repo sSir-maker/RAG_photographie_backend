@@ -25,18 +25,18 @@ jobs:
         pwd
         echo "📁 Structure du dépôt:"
         ls -la
-        echo "📁 Fichiers Python requis:"
-        ls -la requirements*.txt || echo "⚠️ Aucun fichier requirements*.txt trouvé"
-        echo "📁 Dossiers app et tests:"
-        ls -la app/ 2>/dev/null | head -3 || echo "⚠️ Dossier app/ non trouvé"
-        ls -la tests/ 2>/dev/null | head -3 || echo "⚠️ Dossier tests/ non trouvé"
+        echo "📁 Fichiers Python requis dans backend/:"
+        ls -la backend/requirements*.txt 2>/dev/null || echo "⚠️ Aucun fichier requirements*.txt trouvé dans backend/"
+        echo "📁 Dossiers app et tests dans backend/:"
+        ls -la backend/app/ 2>/dev/null | head -3 || echo "⚠️ Dossier backend/app/ non trouvé"
+        ls -la backend/tests/ 2>/dev/null | head -3 || echo "⚠️ Dossier backend/tests/ non trouvé"
     
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
-        cache-dependency-path: requirements.txt
+        cache-dependency-path: backend/requirements.txt
     
     - name: Install system dependencies
       run: |
@@ -46,24 +46,24 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        # Chercher requirements.txt à la racine ou dans backend/
-        if [ -f "requirements.txt" ]; then
-          echo "✅ Installation depuis requirements.txt (racine)"
-          pip install -r requirements.txt
-        elif [ -f "backend/requirements.txt" ]; then
+        # Utiliser le chemin backend/requirements.txt (structure monorepo)
+        if [ -f "backend/requirements.txt" ]; then
           echo "✅ Installation depuis backend/requirements.txt"
           pip install -r backend/requirements.txt
+        elif [ -f "requirements.txt" ]; then
+          echo "✅ Installation depuis requirements.txt (racine)"
+          pip install -r requirements.txt
         else
-          echo "❌ Fichier requirements.txt non trouvé ni à la racine ni dans backend/"
+          echo "❌ Fichier requirements.txt non trouvé"
           exit 1
         fi
-        # Chercher requirements-test.txt à la racine ou dans backend/
-        if [ -f "requirements-test.txt" ]; then
-          echo "✅ Installation depuis requirements-test.txt (racine)"
-          pip install -r requirements-test.txt || true
-        elif [ -f "backend/requirements-test.txt" ]; then
+        # Utiliser le chemin backend/requirements-test.txt (structure monorepo)
+        if [ -f "backend/requirements-test.txt" ]; then
           echo "✅ Installation depuis backend/requirements-test.txt"
           pip install -r backend/requirements-test.txt || true
+        elif [ -f "requirements-test.txt" ]; then
+          echo "✅ Installation depuis requirements-test.txt (racine)"
+          pip install -r requirements-test.txt || true
         else
           echo "⚠️ Fichier requirements-test.txt non trouvé (optionnel)"
         fi
@@ -71,7 +71,17 @@ jobs:
     - name: Run tests (non-blocking)
       continue-on-error: true
       run: |
-        pytest tests/ -v --cov=app --cov-report=xml --cov-report=html || true
+        # Chercher tests/ dans backend/ ou à la racine
+        if [ -d "backend/tests" ]; then
+          echo "✅ Exécution des tests depuis backend/tests/"
+          cd backend
+          pytest tests/ -v --cov=app --cov-report=xml --cov-report=html || true
+        elif [ -d "tests" ]; then
+          echo "✅ Exécution des tests depuis tests/"
+          pytest tests/ -v --cov=app --cov-report=xml --cov-report=html || true
+        else
+          echo "⚠️ Dossier tests/ non trouvé"
+        fi
       env:
         SKIP_RATE_LIMIT: "true"
     
@@ -79,7 +89,7 @@ jobs:
       if: always()
       uses: codecov/codecov-action@v3
       with:
-        file: ./coverage.xml
+        file: ./backend/coverage.xml
         flags: backend
         name: codecov-backend
         fail_ci_if_error: false
@@ -107,8 +117,8 @@ jobs:
       if: github.event_name != 'pull_request'
       uses: docker/build-push-action@v5
       with:
-        context: .
-        file: ./Dockerfile
+        context: ./backend
+        file: ./backend/Dockerfile
         push: true
         tags: |
           ${{ secrets.DOCKER_USERNAME }}/rag-photographie-backend:latest
