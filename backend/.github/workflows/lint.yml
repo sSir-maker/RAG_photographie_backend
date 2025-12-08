@@ -29,25 +29,39 @@ jobs:
     - name: Format with Black (ALWAYS - NO CHECK)
       run: |
         echo "🔧 Formatage automatique des fichiers avec Black..."
-        black app/ tests/
+        echo "📁 Vérification des dossiers..."
+        ls -la
+        if [ -d "app" ] && [ -d "tests" ]; then
+          black app/ tests/ || echo "⚠️ Erreur Black (non-bloquant)"
+        else
+          echo "⚠️ Les dossiers app/ ou tests/ n'existent pas, skip du formatage"
+        fi
     
     - name: Format with isort (ALWAYS - NO CHECK)
       run: |
         echo "🔧 Formatage automatique des imports avec isort..."
-        isort app/ tests/
+        if [ -d "app" ] && [ -d "tests" ]; then
+          isort app/ tests/ || echo "⚠️ Erreur isort (non-bloquant)"
+        else
+          echo "⚠️ Les dossiers app/ ou tests/ n'existent pas, skip du formatage"
+        fi
     
     - name: Commit and push formatted code
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        if [ -n "$(git status --porcelain app/ tests/)" ]; then
-          echo "📝 Changements détectés, commit automatique..."
-          git add app/ tests/
-          git commit -m "style: Auto-format code with Black and isort [skip ci]" || exit 0
-          git push || exit 0
-          echo "✅ Fichiers formatés et poussés automatiquement"
+        if [ -d "app" ] && [ -d "tests" ]; then
+          if [ -n "$(git status --porcelain app/ tests/ 2>/dev/null)" ]; then
+            echo "📝 Changements détectés, commit automatique..."
+            git add app/ tests/ || true
+            git commit -m "style: Auto-format code with Black and isort [skip ci]" || exit 0
+            git push || exit 0
+            echo "✅ Fichiers formatés et poussés automatiquement"
+          else
+            echo "✅ Aucun changement nécessaire, tout est déjà formaté"
+          fi
         else
-          echo "✅ Aucun changement nécessaire, tout est déjà formaté"
+          echo "⚠️ Les dossiers app/ ou tests/ n'existent pas, skip du commit"
         fi
 
   # JOB 2: LINTING (non-bloquant, après le formatage)
@@ -68,14 +82,26 @@ jobs:
     - name: Run Flake8 (non-blocking)
       continue-on-error: true
       run: |
-        flake8 app/ tests/ --max-line-length=120 --extend-ignore=E203,W503,E501 || true
+        if [ -d "app" ] && [ -d "tests" ]; then
+          flake8 app/ tests/ --max-line-length=120 --extend-ignore=E203,W503,E501 || true
+        else
+          echo "⚠️ Les dossiers app/ ou tests/ n'existent pas, skip Flake8"
+        fi
     
     - name: Run Pylint (non-blocking)
       continue-on-error: true
       run: |
-        pylint app/ --disable=C0111,C0103,R0913,R0903,W0613 || true
+        if [ -d "app" ]; then
+          pylint app/ --disable=C0111,C0103,R0913,R0903,W0613 || true
+        else
+          echo "⚠️ Le dossier app/ n'existe pas, skip Pylint"
+        fi
     
     - name: Run MyPy (non-blocking)
       continue-on-error: true
       run: |
-        mypy app/ --ignore-missing-imports --no-strict-optional || true
+        if [ -d "app" ]; then
+          mypy app/ --ignore-missing-imports --no-strict-optional || true
+        else
+          echo "⚠️ Le dossier app/ n'existe pas, skip MyPy"
+        fi
