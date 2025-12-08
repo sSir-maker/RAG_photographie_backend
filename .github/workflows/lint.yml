@@ -29,20 +29,31 @@ jobs:
     - name: Format with Black (ALWAYS - NO CHECK)
       run: |
         echo "🔧 Formatage automatique des fichiers avec Black..."
-        black app/ tests/
+        # Formate tous les fichiers Python trouvés
+        if [ -n "$(find . -name '*.py' -print -quit)" ]; then
+          black .
+        else
+          echo "⚠️ Aucun fichier Python trouvé - skip black"
+        fi
     
     - name: Format with isort (ALWAYS - NO CHECK)
       run: |
-        # Essaie de formater . (racine) au lieu de app/
-        black . 2>/dev/null || echo "✅ Aucun fichier Python à formater"
+        echo "🔧 Formatage automatique des imports avec isort..."
+        # Formate tous les fichiers Python trouvés
+        if [ -n "$(find . -name '*.py' -print -quit)" ]; then
+          isort .
+        else
+          echo "⚠️ Aucun fichier Python trouvé - skip isort"
+        fi
     
     - name: Commit and push formatted code
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        if [ -n "$(git status --porcelain app/ tests/)" ]; then
+        # Vérifie tous les changements, pas seulement app/ tests/
+        if [ -n "$(git status --porcelain)" ]; then
           echo "📝 Changements détectés, commit automatique..."
-          git add app/ tests/
+          git add -A
           git commit -m "style: Auto-format code with Black and isort [skip ci]" || exit 0
           git push || exit 0
           echo "✅ Fichiers formatés et poussés automatiquement"
@@ -68,15 +79,29 @@ jobs:
     - name: Run Flake8 (non-blocking)
       continue-on-error: true
       run: |
-        flake8 app/ tests/ --max-line-length=120 --extend-ignore=E203,W503,E501 || true
+        # Cherche tous les fichiers Python
+        if [ -n "$(find . -name '*.py' -print -quit)" ]; then
+          flake8 . --max-line-length=120 --extend-ignore=E203,W503,E501 || true
+        else
+          echo "⚠️ Aucun fichier Python trouvé - skip flake8"
+        fi
     
     - name: Run Pylint (non-blocking)
       continue-on-error: true
       run: |
-        pylint app/ --disable=C0111,C0103,R0913,R0903,W0613 || true
+        # Cherche tous les fichiers Python
+        if [ -n "$(find . -name '*.py' -print -quit)" ]; then
+          find . -name "*.py" -exec pylint {} --disable=C0111,C0103,R0913,R0903,W0613 \; || true
+        else
+          echo "⚠️ Aucun fichier Python trouvé - skip pylint"
+        fi
     
     - name: Run MyPy (non-blocking)
       continue-on-error: true
       run: |
-        mypy app/ --ignore-missing-imports --no-strict-optional || true
-
+        # Cherche tous les fichiers Python
+        if [ -n "$(find . -name '*.py' -print -quit)" ]; then
+          mypy . --ignore-missing-imports --no-strict-optional || true
+        else
+          echo "⚠️ Aucun fichier Python trouvé - skip mypy"
+        fi
