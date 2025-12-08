@@ -30,20 +30,38 @@ jobs:
       run: |
         echo "🔧 Formatage automatique des fichiers avec Black..."
         echo "📁 Vérification des dossiers..."
+        pwd
         ls -la
-        if [ -d "app" ] && [ -d "tests" ]; then
-          black app/ tests/ || echo "⚠️ Erreur Black (non-bloquant)"
+        echo "📁 Recherche des fichiers Python..."
+        find . -type f -name "*.py" | head -10 || true
+        echo "📁 Vérification existence app/ et tests/..."
+        if [ -d "app" ]; then
+          echo "✅ Dossier app/ existe"
+          ls -la app/ | head -5 || true
         else
-          echo "⚠️ Les dossiers app/ ou tests/ n'existent pas, skip du formatage"
+          echo "❌ Dossier app/ n'existe pas"
+        fi
+        if [ -d "tests" ]; then
+          echo "✅ Dossier tests/ existe"
+          ls -la tests/ | head -5 || true
+        else
+          echo "❌ Dossier tests/ n'existe pas"
+        fi
+        if [ -d "app" ] && [ -d "tests" ]; then
+          echo "✅ Exécution de Black..."
+          black app tests 2>&1 || echo "⚠️ Erreur Black (non-bloquant)"
+        else
+          echo "⚠️ Skip du formatage Black - dossiers manquants"
         fi
     
     - name: Format with isort (ALWAYS - NO CHECK)
       run: |
         echo "🔧 Formatage automatique des imports avec isort..."
         if [ -d "app" ] && [ -d "tests" ]; then
-          isort app/ tests/ || echo "⚠️ Erreur isort (non-bloquant)"
+          echo "✅ Exécution de isort..."
+          isort app tests 2>&1 || echo "⚠️ Erreur isort (non-bloquant)"
         else
-          echo "⚠️ Les dossiers app/ ou tests/ n'existent pas, skip du formatage"
+          echo "⚠️ Skip du formatage isort - dossiers manquants"
         fi
     
     - name: Commit and push formatted code
