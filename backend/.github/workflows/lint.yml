@@ -26,99 +26,63 @@ jobs:
       run: |
         pip install black isort
     
+    - name: Debug - Structure du projet
+      run: |
+        echo "📁 Répertoire de travail:"
+        pwd
+        echo ""
+        echo "📁 Structure du dépôt:"
+        ls -la
+        echo ""
+        echo "📁 Recherche récursive des fichiers Python:"
+        find . -type f -name "*.py" | head -20 || true
+        echo ""
+        echo "📁 Recherche des dossiers courants:"
+        find . -type d -maxdepth 2 -name "app" -o -name "tests" -o -name "backend" | head -10 || true
+    
     - name: Format with Black (ALWAYS - NO CHECK)
       run: |
         echo "🔧 Formatage automatique des fichiers avec Black..."
-        echo "📁 Répertoire de travail:"
-        pwd
-        echo "📁 Structure du dépôt:"
-        ls -la
-        echo "📁 Recherche des dossiers app/ et tests/..."
-        # Déterminer les chemins corrects pour la structure monorepo
-        if [ -d "backend/app" ] && [ -d "backend/tests" ]; then
-          echo "✅ Structure monorepo détectée: backend/app/ et backend/tests/"
-          APP_PATH="backend/app"
-          TESTS_PATH="backend/tests"
-        elif [ -d "app" ] && [ -d "tests" ]; then
-          echo "✅ Structure dépôt backend détectée: app/ et tests/"
-          APP_PATH="app"
-          TESTS_PATH="tests"
-        else
-          echo "⚠️ Structure non reconnue, recherche approfondie..."
-          find . -type d -name "app" | head -3
-          find . -type d -name "tests" | head -3
-          if [ -d "backend/app" ]; then
-            APP_PATH="backend/app"
-            TESTS_PATH="backend/tests"
-          else
-            echo "⚠️ Skip du formatage Black - dossiers app/ et tests/ non trouvés"
-            exit 0
-          fi
+        echo "📁 Recherche de fichiers Python..."
+        PYTHON_FILES=$(find . -type f -name "*.py" ! -path "*/venv/*" ! -path "*/__pycache__/*" ! -path "*/.git/*" 2>/dev/null | head -10)
+        if [ -z "$PYTHON_FILES" ]; then
+          echo "⚠️ Aucun fichier Python trouvé - skip du formatage"
+          exit 0
         fi
-        echo "✅ Exécution de Black sur $APP_PATH et $TESTS_PATH..."
-        black "$APP_PATH" "$TESTS_PATH" 2>&1 || echo "⚠️ Erreur Black (non-bloquant)"
+        echo "✅ Fichiers Python trouvés, formatage avec Black..."
+        echo "$PYTHON_FILES"
+        # Utiliser '.' pour formater tout le dépôt (Black ignore automatiquement venv/, .git/, etc.)
+        black . --exclude='/(venv|\.git|__pycache__|\.venv|env|build|dist)/' 2>&1 || echo "⚠️ Erreur Black (non-bloquant)"
     
     - name: Format with isort (ALWAYS - NO CHECK)
       run: |
         echo "🔧 Formatage automatique des imports avec isort..."
-        # Déterminer les chemins corrects (même logique que Black)
-        if [ -d "backend/app" ] && [ -d "backend/tests" ]; then
-          APP_PATH="backend/app"
-          TESTS_PATH="backend/tests"
-        elif [ -d "app" ] && [ -d "tests" ]; then
-          APP_PATH="app"
-          TESTS_PATH="tests"
-        else
-          echo "⚠️ Skip du formatage isort - dossiers manquants"
+        PYTHON_FILES=$(find . -type f -name "*.py" ! -path "*/venv/*" ! -path "*/__pycache__/*" ! -path "*/.git/*" 2>/dev/null | head -10)
+        if [ -z "$PYTHON_FILES" ]; then
+          echo "⚠️ Aucun fichier Python trouvé - skip du formatage isort"
           exit 0
         fi
-        echo "✅ Exécution de isort sur $APP_PATH et $TESTS_PATH..."
-        isort "$APP_PATH" "$TESTS_PATH" 2>&1 || echo "⚠️ Erreur isort (non-bloquant)"
+        echo "✅ Fichiers Python trouvés, formatage avec isort..."
+        # Utiliser '.' pour formater tout le dépôt
+        isort . --skip venv --skip .git --skip __pycache__ --skip .venv 2>&1 || echo "⚠️ Erreur isort (non-bloquant)"
     
     - name: Commit and push formatted code
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        # Déterminer les chemins corrects
-        if [ -d "backend/app" ]; then
-          APP_DIR="backend/app"
-          TESTS_DIR="backend/tests"
-        elif [ -d "app" ]; then
-          APP_DIR="app"
-          TESTS_DIR="tests"
+        # Vérifier les changements dans tous les fichiers Python formatés
+        CHANGED=$(git status --porcelain "*.py" 2>/dev/null | grep -v "^??" || true)
+        if [ -n "$CHANGED" ]; then
+          echo "📝 Changements détectés, commit automatique..."
+          echo "Fichiers modifiés:"
+          echo "$CHANGED"
+          # Ajouter tous les fichiers Python modifiés
+          git add -u "*.py" 2>/dev/null || git add $(git diff --name-only | grep "\.py$") || true
+          git commit -m "style: Auto-format code with Black and isort [skip ci]" || exit 0
+          git push || exit 0
+          echo "✅ Fichiers formatés et poussés automatiquement"
         else
-          APP_DIR=""
-        fi
-        if [ -n "$APP_DIR" ]; then
-          # Vérifier les changements
-          if [ -d "$TESTS_DIR" ]; then
-            CHANGED=$(git status --porcelain "$APP_DIR" "$TESTS_DIR" 2>/dev/null)
-          elif [ -d "backend/tests" ]; then
-            CHANGED=$(git status --porcelain "$APP_DIR" "backend/tests" 2>/dev/null)
-          elif [ -d "tests" ]; then
-            CHANGED=$(git status --porcelain "$APP_DIR" "tests" 2>/dev/null)
-          else
-            CHANGED=$(git status --porcelain "$APP_DIR" 2>/dev/null)
-          fi
-          if [ -n "$CHANGED" ]; then
-            echo "📝 Changements détectés, commit automatique..."
-            if [ -d "$TESTS_DIR" ]; then
-              git add "$APP_DIR" "$TESTS_DIR" || true
-            elif [ -d "backend/tests" ]; then
-              git add "$APP_DIR" "backend/tests" || true
-            elif [ -d "tests" ]; then
-              git add "$APP_DIR" "tests" || true
-            else
-              git add "$APP_DIR" || true
-            fi
-            git commit -m "style: Auto-format code with Black and isort [skip ci]" || exit 0
-            git push || exit 0
-            echo "✅ Fichiers formatés et poussés automatiquement"
-          else
-            echo "✅ Aucun changement nécessaire, tout est déjà formaté"
-          fi
-        else
-          echo "⚠️ Les dossiers app/ ou tests/ n'existent pas, skip du commit"
+          echo "✅ Aucun changement nécessaire, tout est déjà formaté"
         fi
 
   # JOB 2: LINTING (non-bloquant, après le formatage)
