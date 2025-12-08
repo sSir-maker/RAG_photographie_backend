@@ -23,13 +23,21 @@ jobs:
       run: |
         echo "📁 Répertoire de travail:"
         pwd
-        echo "📁 Structure du dépôt:"
+        echo ""
+        echo "📁 Structure du dépôt (racine):"
         ls -la
-        echo "📁 Fichiers Python requis dans backend/:"
-        ls -la backend/requirements*.txt 2>/dev/null || echo "⚠️ Aucun fichier requirements*.txt trouvé dans backend/"
-        echo "📁 Dossiers app et tests dans backend/:"
-        ls -la backend/app/ 2>/dev/null | head -3 || echo "⚠️ Dossier backend/app/ non trouvé"
-        ls -la backend/tests/ 2>/dev/null | head -3 || echo "⚠️ Dossier backend/tests/ non trouvé"
+        echo ""
+        echo "📁 Recherche récursive de requirements.txt:"
+        find . -name "requirements.txt" -type f 2>/dev/null || echo "⚠️ Aucun requirements.txt trouvé"
+        echo ""
+        echo "📁 Recherche récursive de requirements*.txt:"
+        find . -name "requirements*.txt" -type f 2>/dev/null || echo "⚠️ Aucun fichier requirements*.txt trouvé"
+        echo ""
+        echo "📁 Structure complète du dépôt (premiers niveaux):"
+        find . -maxdepth 3 -type d 2>/dev/null | head -30 || true
+        echo ""
+        echo "📁 Dossiers app et tests:"
+        find . -type d -name "app" -o -name "tests" 2>/dev/null | head -10 || echo "⚠️ Dossiers app/ ou tests/ non trouvés"
     
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
@@ -47,33 +55,22 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         echo "📁 Recherche de requirements.txt..."
-        # Afficher la structure pour debug
-        echo "📁 Contenu du répertoire:"
-        ls -la | head -20
-        echo ""
-        echo "📁 Recherche récursive de requirements.txt:"
-        find . -name "requirements.txt" -type f 2>/dev/null || true
-        echo ""
-        # Chercher requirements.txt dans différents emplacements possibles
-        if [ -f "backend/requirements.txt" ]; then
-          echo "✅ Installation depuis backend/requirements.txt"
-          pip install -r backend/requirements.txt
-        elif [ -f "requirements.txt" ]; then
-          echo "✅ Installation depuis requirements.txt (racine)"
-          pip install -r requirements.txt
-        else
+        # Trouver le chemin exact de requirements.txt
+        REQ_FILE=$(find . -name "requirements.txt" -type f ! -path "*/venv/*" ! -path "*/.venv/*" ! -path "*/.git/*" 2>/dev/null | head -1)
+        if [ -z "$REQ_FILE" ]; then
           echo "❌ ERREUR: Fichier requirements.txt non trouvé"
-          echo "📁 Structure complète du dépôt:"
-          find . -type f -name "*.txt" | head -10
+          echo "📁 Recherche de tous les fichiers .txt:"
+          find . -name "*.txt" -type f 2>/dev/null | head -20
           exit 1
         fi
+        echo "✅ Fichier requirements.txt trouvé: $REQ_FILE"
+        echo "✅ Installation depuis $REQ_FILE"
+        pip install -r "$REQ_FILE"
         # Chercher requirements-test.txt
-        if [ -f "backend/requirements-test.txt" ]; then
-          echo "✅ Installation depuis backend/requirements-test.txt"
-          pip install -r backend/requirements-test.txt || true
-        elif [ -f "requirements-test.txt" ]; then
-          echo "✅ Installation depuis requirements-test.txt (racine)"
-          pip install -r requirements-test.txt || true
+        REQ_TEST_FILE=$(find . -name "requirements-test.txt" -type f ! -path "*/venv/*" ! -path "*/.venv/*" ! -path "*/.git/*" 2>/dev/null | head -1)
+        if [ -n "$REQ_TEST_FILE" ]; then
+          echo "✅ Installation depuis $REQ_TEST_FILE"
+          pip install -r "$REQ_TEST_FILE" || true
         else
           echo "⚠️ Fichier requirements-test.txt non trouvé (optionnel)"
         fi
