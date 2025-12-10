@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y \
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel --timeout=300 --retries=5
 
 # Copier d'abord requirements.txt pour utiliser le cache Docker
-COPY requirements.txt .
+COPY backend/requirements.txt .
 
 # Installer les dépendances Python avec gestion d'erreurs robuste
 # Options pour gérer les problèmes de connexion réseau (BrokenPipeError) :
@@ -43,7 +43,7 @@ RUN pip cache purge && \
     rm -rf /root/.cache/pip
 
 # Copier uniquement les fichiers nécessaires (exclut data/ via .dockerignore)
-COPY . .
+COPY backend/ .
 
 # Créer les dossiers nécessaires avec permissions
 RUN mkdir -p storage/vector_store data phoenix_data && \
