@@ -30,12 +30,29 @@ jobs:
         sudo apt-get install -y tesseract-ocr
     
     - name: Install Python dependencies
+      working-directory: backend
       run: |
+        echo "📁 Vérification du répertoire backend..."
+        pwd
+        ls -la
+        echo "📦 Mise à jour de pip..."
         python -m pip install --upgrade pip
+        echo "📋 Installation des dépendances..."
+        if [ ! -f requirements.txt ]; then
+          echo "❌ Erreur: requirements.txt introuvable dans backend/"
+          echo "Contenu du répertoire:"
+          ls -la
+          exit 1
+        fi
         pip install -r requirements.txt
-        pip install -r requirements-test.txt
+        if [ -f requirements-test.txt ]; then
+          pip install -r requirements-test.txt
+        else
+          echo "⚠️ requirements-test.txt introuvable, continuation sans..."
+        fi
     
     - name: Run linters
+      working-directory: backend
       run: |
         pip install flake8 pylint mypy
         # Note: Le formatage avec Black est géré automatiquement par lint.yml
@@ -44,6 +61,7 @@ jobs:
         pylint app/ --disable=C0111,C0103,R0913 || true
     
     - name: Run tests (non-blocking)
+      working-directory: backend
       continue-on-error: true
       run: |
         pytest tests/ -v --cov=app --cov-report=xml --cov-report=html || true
@@ -53,7 +71,7 @@ jobs:
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
-        file: ./coverage.xml
+        file: ./backend/coverage.xml
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
