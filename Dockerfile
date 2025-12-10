@@ -10,11 +10,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copier et installer les dépendances Python
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copier le code de l'application
-COPY . .
+COPY backend/ .
 
 # Créer les dossiers nécessaires
 RUN mkdir -p storage/vector_store data phoenix_data
